@@ -1,0 +1,37 @@
+{
+  "name": "fastify-express",
+  "version": "0.0.1",
+  "description": "Express compatibility layer for Fastify",
+  "main": "index.js",
+  "scripts": {
+    "test": "standard && tap test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fastify/fastify-express.git"
+  },
+  "keywords": [
+    "fastify",
+    "express",
+    "middlewares",
+    "use",
+    "compatibility"
+  ],
+  "author": "Tomas Della Vedova - @delvedor (http://delved.org)",
+  "license": " MIT",
+  "bugs": {
+    "url": "https://github.com/fastify/fastify-express/issues"
+  },
+  "homepage": "https://github.com/fastify/fastify-express#readme",
+  "devDependencies": {
+    "cors": "^2.8.5",
+    "fastify": "^2.0.1",
+    "simple-get": "^3.0.3",
+    "standard": "^12.0.1",
+    "tap": "^12.6.0"
+  },
+  "dependencies": {
+    "express": "^4.16.4",
+    "fastify-plugin": "^1.5.0"
+  }
+}
