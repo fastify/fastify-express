@@ -32,6 +32,36 @@ test('Should support connect style middlewares', t => {
     })
 })
 
+test('Should support per path middlewares', t => {
+  t.plan(5)
+
+  const fastify = Fastify()
+
+  fastify
+    .register(expressPlugin)
+    .after(() => fastify.use('/cors', cors()))
+    .listen(0, (err, address) => {
+      t.error(err)
+      sget({
+        method: 'GET',
+        url: address + '/cors'
+      }, (err, res, data) => {
+        t.error(err)
+        t.match(res.headers, {
+          'access-control-allow-origin': '*'
+        })
+        sget({
+          method: 'GET',
+          url: address
+        }, (err, res, data) => {
+          t.error(err)
+          t.notOk(res.headers['access-control-allow-origin'])
+          fastify.close()
+        })
+      })
+    })
+})
+
 test('Should support complex middlewares', t => {
   t.plan(4)
 
