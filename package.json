@@ -26,6 +26,8 @@
   "devDependencies": {
     "cors": "^2.8.5",
     "fastify": "^2.0.1",
+    "passport": "^0.4.0",
+    "passport-http-bearer": "^1.0.1",
     "simple-get": "^3.0.3",
     "standard": "^12.0.1",
     "tap": "^12.6.0"
