@@ -12,8 +12,12 @@ function expressPlugin (fastify, options, next) {
   fastify.use = use
   fastify.addHook('onRequest', runConnect)
 
-  function use (fn) {
-    express.use(fn)
+  function use (path, fn) {
+    if (fn == null) {
+      express.use(path)
+    } else {
+      express.use(path, fn)
+    }
     return this
   }
 
