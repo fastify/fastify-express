@@ -4,7 +4,7 @@
   "description": "Express compatibility layer for Fastify",
   "main": "index.js",
   "scripts": {
-    "test": "standard && tap test.js"
+    "test": "standard && tap --no-coverage test.js"
   },
   "repository": {
     "type": "git",
@@ -25,15 +25,15 @@
   "homepage": "https://github.com/fastify/fastify-express#readme",
   "devDependencies": {
     "cors": "^2.8.5",
-    "fastify": "^2.0.1",
-    "passport": "^0.4.0",
+    "fastify": "git://github.com/fastify/fastify.git#fix-hook-encapsulation",
+    "passport": "^0.4.1",
     "passport-http-bearer": "^1.0.1",
-    "simple-get": "^3.0.3",
-    "standard": "^12.0.1",
-    "tap": "^12.6.0"
+    "simple-get": "^3.1.0",
+    "standard": "^14.3.1",
+    "tap": "^14.10.5"
   },
   "dependencies": {
-    "express": "^4.16.4",
-    "fastify-plugin": "^1.5.0"
+    "express": "^4.17.1",
+    "fastify-plugin": "^1.6.0"
   }
 }
