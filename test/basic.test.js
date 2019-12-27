@@ -7,7 +7,7 @@ const cors = require('cors')
 const passport = require('passport')
 const Strategy = require('passport-http-bearer').Strategy
 
-const expressPlugin = require('./index')
+const expressPlugin = require('../index')
 
 test('Should support connect style middlewares', t => {
   t.plan(4)
