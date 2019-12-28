@@ -574,3 +574,36 @@ test('Send a response from a middleware', t => {
     t.fail('We should not be here')
   }
 })
+
+test('Should support plugin level prefix', t => {
+  t.plan(4)
+  const fastify = Fastify()
+  t.teardown(fastify.close)
+
+  fastify.register(expressPlugin)
+
+  fastify.register((instance, opts, next) => {
+    instance.use('/world', (req, res, next) => {
+      res.setHeader('x-foo', 'bar')
+      next()
+    })
+
+    instance.get('/world', (req, reply) => {
+      reply.send({ hello: 'world' })
+    })
+
+    next()
+  }, { prefix: '/hello' })
+
+  fastify.listen(0, (err, address) => {
+    t.error(err)
+    sget({
+      method: 'GET',
+      url: address + '/hello/world'
+    }, (err, res, data) => {
+      t.error(err)
+      t.strictEqual(res.headers['x-foo'], 'bar')
+      t.deepEqual(JSON.parse(data), { hello: 'world' })
+    })
+  })
+})
