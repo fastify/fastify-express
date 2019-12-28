@@ -30,14 +30,14 @@ function expressPlugin (fastify, options, next) {
 
   function runConnect (req, reply, next) {
     if (this[kMiddlewares].length > 0) {
-      this[kExpress](req.raw, reply.res, next)
+      this[kExpress](req.raw, reply.raw, next)
     } else {
       next()
     }
   }
 
   function runOnSend (req, reply, payload, next) {
-    reply.res.removeHeader('x-powered-by')
+    reply.raw.removeHeader('x-powered-by')
     next()
   }
 
