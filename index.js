@@ -1,6 +1,7 @@
 'use strict'
 
 const fp = require('fastify-plugin')
+const symbols = require('fastify/lib/symbols')
 const Express = require('express')
 const kMiddlewares = Symbol('fastify-express-middlewares')
 const kExpress = Symbol('fastify-express-instance')
@@ -19,6 +20,10 @@ function expressPlugin (fastify, options, next) {
     .addHook('onRegister', onRegister)
 
   function use (path, fn) {
+    if (typeof path === 'string') {
+      const prefix = this[symbols.kRoutePrefix]
+      path = prefix + (path === '/' && prefix.length > 0 ? '' : path)
+    }
     this[kMiddlewares].push([path, fn])
     if (fn == null) {
       this[kExpress].use(path)
