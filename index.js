@@ -15,6 +15,7 @@ function expressPlugin (fastify, options, next) {
   fastify[kExpress] = Express()
 
   fastify
+    .addHook('onRequest', enhanceRequest)
     .addHook('onRequest', runConnect)
     .addHook('onSend', runOnSend)
     .addHook('onRegister', onRegister)
@@ -31,6 +32,17 @@ function expressPlugin (fastify, options, next) {
       this[kExpress].use(path, fn)
     }
     return this
+  }
+
+  function enhanceRequest (req, reply, next) {
+    req.raw.originalUrl = req.raw.url
+    req.raw.id = req.id
+    req.raw.hostname = req.hostname
+    req.raw.ip = req.ip
+    req.raw.ips = req.ips
+    req.raw.log = req.log
+    reply.raw.log = req.log
+    next()
   }
 
   function runConnect (req, reply, next) {
