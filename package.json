@@ -25,7 +25,7 @@
   "homepage": "https://github.com/fastify/fastify-express#readme",
   "devDependencies": {
     "cors": "^2.8.5",
-    "fastify": "git://github.com/fastify/fastify.git#next",
+    "fastify": "^3.0.0-alpha.1",
     "helmet": "^3.21.2",
     "passport": "^0.4.1",
     "passport-http-bearer": "^1.0.1",
@@ -36,6 +36,6 @@
   },
   "dependencies": {
     "express": "^4.17.1",
-    "fastify-plugin": "^1.6.0"
+    "fastify-plugin": "^2.0.0"
   }
 }

@@ -72,6 +72,6 @@ function expressPlugin (fastify, options, next) {
 }
 
 module.exports = fp(expressPlugin, {
-  // fastify: '>=3.0.0',
+  fastify: '>=3.0.0',
   name: 'fastify-express'
 })
