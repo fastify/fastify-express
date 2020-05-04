@@ -9,6 +9,36 @@ const Strategy = require('passport-http-bearer').Strategy
 
 const expressPlugin = require('../index')
 
+test('Readme Example', t => {
+  t.plan(2)
+  const fastify = Fastify()
+  t.teardown(fastify.close)
+  const router = require('express').Router()
+
+  router.use(function (req, res, next) {
+    res.setHeader('x-custom', true)
+    next()
+  })
+
+  router.get('/hello', (req, res) => {
+    res.status(201)
+    res.json({ hello: 'world' })
+  })
+
+  router.get('/foo', (req, res) => {
+    res.status(400)
+    res.json({ foo: 'bar' })
+  })
+
+  fastify.register(expressPlugin)
+    .after(() => fastify.use(router))
+
+  fastify.listen(0, (err) => {
+    t.error(err)
+    t.pass('application started')
+  })
+})
+
 test('Should support connect style middlewares', t => {
   t.plan(4)
   const fastify = Fastify()
