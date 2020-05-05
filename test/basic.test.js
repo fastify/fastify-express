@@ -9,7 +9,7 @@ const Strategy = require('passport-http-bearer').Strategy
 
 const expressPlugin = require('../index')
 
-test('Readme Example', t => {
+test('Readme Example', { skip: true }, t => {
   t.plan(2)
   const fastify = Fastify()
   t.teardown(fastify.close)
