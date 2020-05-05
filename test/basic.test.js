@@ -31,7 +31,7 @@ test('Readme Example', t => {
   })
 
   fastify.register(expressPlugin)
-    .after(() => fastify.use(router))
+    .after(() => { fastify.use(router) })
 
   fastify.listen(0, (err) => {
     t.error(err)
