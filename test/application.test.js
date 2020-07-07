@@ -24,7 +24,7 @@ test('Register express application', t => {
   })
 
   fastify.register(expressPlugin)
-    .after(() => fastify.use(express))
+    .after(() => { fastify.use(express) })
 
   fastify.listen(0, (err, address) => {
     t.error(err)
@@ -63,7 +63,7 @@ test('Register express application that uses Router', t => {
   })
 
   fastify.register(expressPlugin)
-    .after(() => fastify.use(router))
+    .after(() => { fastify.use(router) })
 
   fastify.listen(0, (err, address) => {
     t.error(err)

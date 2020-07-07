@@ -16,7 +16,7 @@ test('Should support connect style middlewares', t => {
 
   fastify
     .register(expressPlugin)
-    .after(() => fastify.use(cors()))
+    .after(() => { fastify.use(cors()) })
 
   fastify.get('/', async (req, reply) => {
     return { hello: 'world' }
@@ -101,7 +101,7 @@ test('Should support per path middlewares', t => {
 
   fastify
     .register(expressPlugin)
-    .after(() => fastify.use('/cors', cors()))
+    .after(() => { fastify.use('/cors', cors()) })
 
   fastify.get('/cors/hello', async (req, reply) => {
     return { hello: 'world' }
@@ -145,7 +145,7 @@ test('Should support complex middlewares', t => {
 
   fastify
     .register(expressPlugin)
-    .after(() => fastify.use(passport.authenticate('bearer', { session: false })))
+    .after(() => { fastify.use(passport.authenticate('bearer', { session: false })) })
   fastify
     .get('/', (req, reply) => {
       t.deepEqual(req.raw.user, { token: '123456789' })
@@ -173,7 +173,7 @@ test('Encapsulation support / 1', t => {
 
   fastify.register((instance, opts, next) => {
     instance.register(expressPlugin)
-      .after(() => instance.use(middleware))
+      .after(() => { instance.use(middleware) })
 
     instance.get('/plugin', (req, reply) => {
       reply.send('ok')
