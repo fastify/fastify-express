@@ -55,7 +55,7 @@ router.get('/foo', (req, res) => {
 })
 
 fastify.register(require('fastify-express'))
-  .after(() => fastify.use(router))
+  .after(() => {fastify.use(router)})
 
 fastify.listen(3000, console.log)
 ```
