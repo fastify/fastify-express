@@ -13,6 +13,7 @@ function expressPlugin (fastify, options, next) {
   fastify.use = use
   fastify[kMiddlewares] = []
   fastify[kExpress] = Express()
+  fastify[kExpress].disable('x-powered-by')
 
   fastify
     .addHook('onRequest', enhanceRequest)
@@ -62,6 +63,7 @@ function expressPlugin (fastify, options, next) {
     const middlewares = instance[kMiddlewares].slice()
     instance[kMiddlewares] = []
     instance[kExpress] = Express()
+    instance[kExpress].disable('x-powered-by')
     instance.use = use
     for (const middleware of middlewares) {
       instance.use(...middleware)
