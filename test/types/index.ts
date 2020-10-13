@@ -1,5 +1,5 @@
 import Fastify from 'fastify'
-import fastifyExpress = require('../..')
+import fastifyExpress from '../..'
 
 const app = Fastify()
 

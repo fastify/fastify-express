@@ -1,5 +1,5 @@
 import { FastifyPluginCallback } from 'fastify'
 
-declare const fastifyExpress: FastifyPluginCallback
+export const fastifyExpress: FastifyPluginCallback
 
-export = fastifyExpress
+export default fastifyExpress
