@@ -4,16 +4,12 @@ const fp = require('fastify-plugin')
 const symbols = require('fastify/lib/symbols')
 const Express = require('express')
 const kMiddlewares = Symbol('fastify-express-middlewares')
-const kExpress = Symbol('fastify-express-instance')
 
 function expressPlugin (fastify, options, next) {
-  // TODO: we should use decorate, but `use` is already
-  // a public API of Fastify. In Fastify v3 it will be deprecated,
-  // so we will able to use `decorate`
-  fastify.use = use
+  fastify.decorate('use', use)
   fastify[kMiddlewares] = []
-  fastify[kExpress] = Express()
-  fastify[kExpress].disable('x-powered-by')
+  fastify.decorate('express', Express())
+  fastify.express.disable('x-powered-by')
 
   fastify
     .addHook('onRequest', enhanceRequest)
@@ -27,9 +23,9 @@ function expressPlugin (fastify, options, next) {
     }
     this[kMiddlewares].push([path, fn])
     if (fn == null) {
-      this[kExpress].use(path)
+      this.express.use(path)
     } else {
-      this[kExpress].use(path, fn)
+      this.express.use(path, fn)
     }
     return this
   }
@@ -47,7 +43,7 @@ function expressPlugin (fastify, options, next) {
 
   function runConnect (req, reply, next) {
     if (this[kMiddlewares].length > 0) {
-      this[kExpress](req.raw, reply.raw, next)
+      this.express(req.raw, reply.raw, next)
     } else {
       next()
     }
@@ -56,9 +52,9 @@ function expressPlugin (fastify, options, next) {
   function onRegister (instance) {
     const middlewares = instance[kMiddlewares].slice()
     instance[kMiddlewares] = []
-    instance[kExpress] = Express()
-    instance[kExpress].disable('x-powered-by')
-    instance.use = use
+    instance.decorate('express', Express())
+    instance.express.disable('x-powered-by')
+    instance.decorate('use', use)
     for (const middleware of middlewares) {
       instance.use(...middleware)
     }
