@@ -48,7 +48,7 @@ test('trust proxy protocol', (t) => {
     })
   })
 
-  fastify.listen(0, (err) => {
+  fastify.listen(0, (err, address) => {
     t.error(err)
     sget({
       method: 'GET',
@@ -57,7 +57,7 @@ test('trust proxy protocol', (t) => {
         'X-Forwarded-Host': 'example.com',
         'X-Forwarded-Proto': 'lorem'
       },
-      url: 'http://localhost:' + fastify.server.address().port
+      url: address
     }, (err, res, data) => {
       t.error(err)
 
