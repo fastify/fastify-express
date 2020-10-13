@@ -5,8 +5,7 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "test": "standard && tap --no-coverage test/*.test.js",
-    "typescript": "tsd"
+    "test": "standard && tap --no-coverage test/*.test.js && tsd"
   },
   "repository": {
     "type": "git",
