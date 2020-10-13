@@ -18,7 +18,6 @@ function expressPlugin (fastify, options, next) {
   fastify
     .addHook('onRequest', enhanceRequest)
     .addHook('onRequest', runConnect)
-    .addHook('onSend', runOnSend)
     .addHook('onRegister', onRegister)
 
   function use (path, fn) {
@@ -52,11 +51,6 @@ function expressPlugin (fastify, options, next) {
     } else {
       next()
     }
-  }
-
-  function runOnSend (req, reply, payload, next) {
-    reply.raw.removeHeader('x-powered-by')
-    next()
   }
 
   function onRegister (instance) {
