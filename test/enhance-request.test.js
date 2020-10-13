@@ -44,7 +44,11 @@ test('trust proxy protocol', (t) => {
 
   fastify.register(expressPlugin).after(() => {
     fastify.use('/', function (req, res) {
-      res.json({ ip: req.ip, hostname: req.hostname, protocol: req.protocol })
+      t.strictEqual(req.ip, '1.1.1.1', 'gets ip from x-forwarded-for')
+      t.strictEqual(req.hostname, 'example.com', 'gets hostname from x-forwarded-host')
+      t.strictEqual(req.protocol, 'lorem', 'gets protocol from x-forwarded-proto')
+
+      res.sendStatus(200)
     })
   })
 
@@ -60,12 +64,6 @@ test('trust proxy protocol', (t) => {
       url: address
     }, (err, res, data) => {
       t.error(err)
-
-      const parsed = JSON.parse(data)
-
-      t.strictEqual(parsed.ip, '1.1.1.1', 'gets ip from x-forwarded-for')
-      t.strictEqual(parsed.hostname, 'example.com', 'gets hostname from x-forwarded-host')
-      t.strictEqual(parsed.protocol, 'lorem', 'gets protocol from x-forwarded-proto')
     })
   })
 })
