@@ -42,6 +42,10 @@ function expressPlugin (fastify, options, next) {
     req.raw.ips = req.ips
     req.raw.log = req.log
     reply.raw.log = req.log
+    // added in Fastify@3.5
+    if (req.protocol) {
+      req.raw.protocol = req.protocol
+    }
     next()
   }
 
