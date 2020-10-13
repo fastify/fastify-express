@@ -130,10 +130,7 @@ test('Should expose the express app on the fastify instance', t => {
 
   fastify
     .register(expressPlugin)
-    .after(() => {
-      fastify.use(router)
-      fastify.express.enable('x-powered-by')
-    })
+    .after(() => { fastify.use(router) })
 
   fastify.listen(0, (err, address) => {
     t.error(err)
@@ -142,7 +139,7 @@ test('Should expose the express app on the fastify instance', t => {
       url: address
     }, (err, res) => {
       t.error(err)
-      t.strictEqual(res.headers['x-powered-by'], 'Express')
+      t.strictEqual(fastify.express.disabled('x-powered-by'), true)
     })
   })
 })

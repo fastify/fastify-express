@@ -23,6 +23,8 @@ async function build () {
   // do you know we also have cors support?
   // https://github.com/fastify/fastify-cors
   fastify.use(require('cors')())
+  // express.Application is also accessible
+  fastify.express.disabled('x-powered-by') // true
   return fastify
 }
 
