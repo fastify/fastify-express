@@ -4,7 +4,7 @@
 
 This plugin adds full [Express](http://expressjs.com) compatibility to Fastify, it exposes the same `use` function of Express, and it allows you to use any Express middleware or application.<br/>
 
-| **Note**   |  This plugin should not be used as a long-term solution, it aims to help you have a smooth transition from Express to Fastify, but you should migrate your Express specific code to Fastify during time.  |
+| **Note**   |  This plugin should not be used as a long-term solution, it aims to help you have a smooth transition from Express to Fastify, but you should migrate your Express specific code to Fastify over time.  |
 | ----   |  :----  |
 
 ## Install
@@ -143,6 +143,10 @@ async function subsystem (fastify, opts) {
   fastify.use(['/css', '/js'], serveStatic(path.join(__dirname, '/assets')))
 }
 ```
+
+## TypeScript support
+
+To use this module with TypeScript, make sure to install `@types/express`.
 
 ## Middlewares alternatives
 
