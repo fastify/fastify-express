@@ -25,6 +25,7 @@
   },
   "homepage": "https://github.com/fastify/fastify-express#readme",
   "devDependencies": {
+    "@types/node": "*",
     "cors": "^2.8.5",
     "fastify": "^3.0.0",
     "helmet": "^3.21.2",
