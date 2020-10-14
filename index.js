@@ -42,10 +42,12 @@ function expressPlugin (fastify, options, next) {
     req.raw.ips = req.ips
     req.raw.log = req.log
     reply.raw.log = req.log
-    // added in Fastify@3.5
-    if (req.protocol) {
-      req.raw.protocol = req.protocol
-    }
+    // added in Fastify@3.5. Make it lazy as it does a bit of work
+    Object.defineProperty(req.raw, 'protocol', {
+      get () {
+        return req.protocol
+      }
+    })
     next()
   }
 
