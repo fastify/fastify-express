@@ -42,6 +42,16 @@ function expressPlugin (fastify, options, next) {
     req.raw.ips = req.ips
     req.raw.log = req.log
     reply.raw.log = req.log
+
+    const originalProtocol = req.raw.protocol
+    // Make it lazy as it does a bit of work
+    Object.defineProperty(req.raw, 'protocol', {
+      get () {
+        // added in Fastify@3.5, so handle it missing
+        return req.protocol || originalProtocol
+      }
+    })
+
     next()
   }
 
