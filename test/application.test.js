@@ -143,3 +143,37 @@ test('Should expose the express app on the fastify instance', t => {
     })
   })
 })
+
+test('Should flush headers if express handles request', t => {
+  t.plan(3)
+  const fastify = Fastify()
+  t.teardown(fastify.close)
+
+  fastify.addHook('onRequest', (_, reply, done) => {
+    reply.header('foo', 'bar')
+
+    done()
+  })
+
+  const router = Express.Router()
+
+  router.get('/', (req, res) => {
+    res.status(201)
+    res.json({ hello: 'world' })
+  })
+
+  fastify
+    .register(expressPlugin)
+    .after(() => { fastify.use(router) })
+
+  fastify.listen(0, (err, address) => {
+    t.error(err)
+    sget({
+      method: 'GET',
+      url: address
+    }, (err, res) => {
+      t.error(err)
+      t.strictEqual(res.headers.foo, 'bar')
+    })
+  })
+})
