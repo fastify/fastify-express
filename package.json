@@ -36,7 +36,7 @@
     "simple-get": "^4.0.0",
     "standard": "^16.0.3",
     "tap": "^14.10.5",
-    "tsd": "^0.13.1"
+    "tsd": "^0.14.0"
   },
   "dependencies": {
     "express": "^4.17.1",
