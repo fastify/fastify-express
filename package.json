@@ -19,7 +19,7 @@
     "compatibility"
   ],
   "author": "Tomas Della Vedova - @delvedor (http://delved.org)",
-  "license": " MIT",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/fastify/fastify-express/issues"
   },
