@@ -1,6 +1,6 @@
 {
   "name": "fastify-express",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Express compatibility layer for Fastify",
   "main": "index.js",
   "types": "index.d.ts",
