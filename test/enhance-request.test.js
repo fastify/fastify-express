@@ -38,7 +38,7 @@ test('Should enhance the Node.js core request/response objects', t => {
 })
 
 test('trust proxy protocol', (t) => {
-  t.plan(5)
+  t.plan(6)
   const fastify = Fastify({ trustProxy: true })
 
   t.tearDown(fastify.close.bind(fastify))
@@ -47,7 +47,8 @@ test('trust proxy protocol', (t) => {
     fastify.use('/', function (req, res) {
       t.strictEqual(req.ip, '1.1.1.1', 'gets ip from x-forwarded-for')
       t.strictEqual(req.hostname, 'example.com', 'gets hostname from x-forwarded-host')
-      t.strictEqual(req.protocol, 'lorem', 'gets protocol from x-forwarded-proto')
+      t.strictEqual(req.protocol, 'https', 'gets protocol from x-forwarded-proto')
+      t.strictEqual(req.secure, true)
 
       res.sendStatus(200)
     })
@@ -60,7 +61,7 @@ test('trust proxy protocol', (t) => {
       headers: {
         'X-Forwarded-For': '1.1.1.1',
         'X-Forwarded-Host': 'example.com',
-        'X-Forwarded-Proto': 'lorem'
+        'X-Forwarded-Proto': 'https'
       },
       url: address
     }, (err, res, data) => {
