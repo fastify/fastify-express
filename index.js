@@ -47,6 +47,12 @@ function expressPlugin (fastify, options, next) {
         return req.protocol || originalProtocol
       }
     })
+    // Adds ExpressJS short-hand for: req.protocol === 'https'
+    Object.defineProperty(req.raw, 'secure', {
+      get () {
+        return req.raw.protocol === 'https'
+      }
+    })
 
     next()
   }

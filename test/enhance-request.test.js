@@ -18,6 +18,7 @@ test('Should enhance the Node.js core request/response objects', t => {
     t.strictEqual(req.raw.id, req.id)
     t.strictEqual(req.raw.hostname, req.hostname)
     t.strictEqual(req.raw.protocol, req.protocol)
+    t.strictEqual(req.raw.secure, true)
     t.strictEqual(req.raw.ip, req.ip)
     t.deepEqual(req.raw.ips, req.ips)
     t.ok(req.raw.log)
