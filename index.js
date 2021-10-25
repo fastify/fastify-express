@@ -41,16 +41,18 @@ function expressPlugin (fastify, options, next) {
 
     const originalProtocol = req.raw.protocol
     // Make it lazy as it does a bit of work
-    Object.defineProperty(req.raw, 'protocol', {
-      get () {
-        // added in Fastify@3.5, so handle it missing
-        return req.protocol || originalProtocol
-      }
-    })
-    // Adds ExpressJS short-hand for: req.protocol === 'https'
-    Object.defineProperty(req.raw, 'secure', {
-      get () {
-        return req.raw.protocol === 'https'
+    Object.defineProperties(req.raw, {
+      // added in Fastify@3.5, so handle it missing
+      protocol: {
+        get () {
+          return req.protocol || originalProtocol
+        }
+      },
+      // Adds ExpressJS short-hand for: req.protocol === 'https'
+      secure: {
+        get () {
+          return req.raw.protocol === 'https'
+        }
       }
     })
 
