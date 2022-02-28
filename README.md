@@ -151,6 +151,8 @@ async function subsystem (fastify, opts) {
 
 To use this module with TypeScript, make sure to install `@types/express`.
 
+You will need to add `"types": ["fastify-express"]` to your tsconfig.json file when using `require` to import the plugin.
+
 ## Middlewares alternatives
 
 Fastify offers some alternatives to the most commonly used middlewares, following, you can find a list.
