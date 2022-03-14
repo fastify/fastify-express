@@ -38,11 +38,13 @@ build()
 
 ### Add a complete application
 
-You can register an entire Express application and make it work with Fastify.
+You can register an entire Express application and make it work with Fastify. Remember, `fastify-express` is just `express` under the covers and requires the same body parsers as you'd use in `express`.
 
 ```js
+// index.js
 const fastify = require('fastify')()
-const router = require('express').Router()
+const express = require('express')
+const router = express.Router()
 
 router.use(function (req, res, next) {
   res.setHeader('x-custom', true)
@@ -59,10 +61,46 @@ router.get('/foo', (req, res) => {
   res.json({ foo: 'bar' })
 })
 
+router.patch('/bar', (req, res) => {
+  if (!req.body || Object.keys(req.body).length === 0) {
+    res.status(400)
+    res.json({ msg: 'no req.body'})
+  } else {
+    res.status(200)
+    res.json(req.body)
+  }
+})
+
+router.use('*', (req, res) => {
+  res.status(404)
+  res.json({ msg: 'not found'})
+})
+
 fastify.register(require('fastify-express'))
-  .after(() => {fastify.use(router)})
+  .after(() => {
+    fastify.use(express.urlencoded({extended: false})) // for Postman x-www-form-urlencoded
+    fastify.use(express.json())
+
+    fastify.use(router)
+  })
 
 fastify.listen(3000, console.log)
+```
+
+#### Testing Your App
+Run `node index.js` to start your server. Then run the following commands to ensure your server is working. Use the optional `-v` flag in curl for verbose output.
+
+```bash
+me@computer ~ % curl -X GET http://localhost:3000/hello
+{"hello":"world"}%
+me@computer ~ % curl -X GET http://localhost:3000/foo
+{"foo":"bar"}%
+me@computer ~ % curl -X GET http://localhost:3000/bar
+{"msg":"not found"}%
+me@computer ~ % curl -X PATCH -H 'content-type:application/json' http://localhost:3000/bar  
+{"msg":"no req.body"}%
+me@computer ~ % curl -X PATCH -H 'content-type:application/json' -d '{"foo2":"bar2"}' http://localhost:3000/bar
+{"foo2":"bar2"}%  
 ```
 
 ### Encapsulation support
