@@ -38,7 +38,7 @@ build()
 
 ### Add a complete application
 
-You can register an entire Express application and make it work with Fastify. Remember, `fastify-express` is just `express` under the covers and requires the same body parsers as you'd juse in `express`.
+You can register an entire Express application and make it work with Fastify. Remember, `fastify-express` is just `express` under the covers and requires the same body parsers as you'd use in `express`.
 
 ```js
 // index.js
