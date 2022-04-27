@@ -40,10 +40,10 @@ function expressPlugin (fastify, options, next) {
     reply.raw.log = req.log
 
     if (req.body) {
-      req.raw.body = req.body
+      req.raw.body = req.body;
     }
     if (req.cookies) {
-      req.raw.cookies = req.cookies
+      req.raw.cookies = req.cookies;
     }
 
     const originalProtocol = req.raw.protocol
