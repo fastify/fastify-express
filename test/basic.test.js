@@ -590,18 +590,6 @@ test('Send a response from a middleware', t => {
         .use(middleware2)
     })
 
-  fastify.addHook('preValidation', (req, reply, next) => {
-    t.fail('We should not be here')
-  })
-
-  fastify.addHook('preParsing', (req, reply, payload, next) => {
-    t.fail('We should not be here')
-  })
-
-  fastify.addHook('preHandler', (req, reply, next) => {
-    t.fail('We should not be here')
-  })
-
   fastify.addHook('onSend', (req, reply, next) => {
     t.fail('We should not be here')
   })
