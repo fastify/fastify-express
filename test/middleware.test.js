@@ -268,6 +268,15 @@ test('res.end should block middleware execution', t => {
       })
     })
 
+  instance.addHook('onRequest', (req, res, next) => {
+    t.ok('called')
+    next()
+  })
+
+  instance.addHook('preHandler', (req, reply, next) => {
+    t.fail('this should not be called')
+  })
+
   instance.addHook('onSend', (req, reply, payload, next) => {
     t.fail('this should not be called')
   })
