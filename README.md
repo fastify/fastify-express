@@ -201,6 +201,62 @@ Fastify offers some alternatives to the most commonly used middlewares, followin
 | [`cors`](https://github.com/expressjs/cors) | [`fastify-cors`](https://github.com/fastify/fastify-cors) |
 | [`serve-static`](https://github.com/expressjs/serve-static) | [`fastify-static`](https://github.com/fastify/fastify-static) |
 
+## Troubleshooting
+
+### POST request with body hangs up
+
+[body-parser](https://github.com/expressjs/body-parser) library incompatible with `fastify-express`, when you have `fastify` routes and any `express` middlewares.
+Any POST requests with **body**, which `body-parser` will try to parse, will be hangs up.
+
+Example application:
+
+```js
+const Fastify = require('fastify')
+const Express = require('express')
+const expressPlugin = require('fastify-express')
+const bodyParser = require('body-parser')
+
+const fastify = Fastify()
+const express = Express()
+
+express.use(bodyParser.urlencoded({ extended: false }))
+
+await fastify.register(expressPlugin)
+
+fastify.use(express)
+
+// this route will never reply
+fastify.post('/hello', (req, reply) => {
+  return { hello: 'world' }
+})
+```
+
+For this case, you need to remove `body-parser`, install `fastify-formbody` and change `fastify-express` options:
+
+
+```js
+const Fastify = require('fastify')
+const Express = require('express')
+const expressPlugin = require('fastify-express')
+const fastifyFormBody = require('fastify-formbody')
+
+const fastify = Fastify()
+const express = Express()
+
+await fastify.register(fastifyFormBody)
+await fastify.register(expressPlugin, {
+  // run express after `fastify-formbody` logic
+  expressHook: 'preHandler'
+})
+
+fastify.use(express)
+
+// it works!
+fastify.post('/hello', (req, reply) => {
+  return { hello: 'world' }
+})
+```
+
 ## License
 
 Licensed under [MIT](./LICENSE).<br/>
