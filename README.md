@@ -1,7 +1,7 @@
-# fastify-express
+# @fastify/express
 
 ![CI](https://github.com/fastify/fastify-express/workflows/CI/badge.svg)
-[![NPM version](https://img.shields.io/npm/v/fastify-express.svg?style=flat)](https://www.npmjs.com/package/fastify-express)
+[![NPM version](https://img.shields.io/npm/v/@fastify/express.svg?style=flat)](https://www.npmjs.com/package/@fastify/express)
 [![Known Vulnerabilities](https://snyk.io/test/github/fastify/fastify-express/badge.svg)](https://snyk.io/test/github/fastify/fastify-express)
 [![js-standard-style](https://img.shields.io/badge/code%20style-standard-brightgreen.svg?style=flat)](https://standardjs.com/)
 
@@ -12,7 +12,7 @@ This plugin adds full [Express](http://expressjs.com) compatibility to Fastify, 
 
 ## Install
 ```
-npm i fastify-express
+npm i @fastify/express
 ```
 
 ## Usage
@@ -22,7 +22,7 @@ const Fastify = require('fastify')
 
 async function build () {
   const fastify = Fastify()
-  await fastify.register(require('fastify-express'))
+  await fastify.register(require('@fastify/express'))
   // do you know we also have cors support?
   // https://github.com/fastify/fastify-cors
   fastify.use(require('cors')())
@@ -38,7 +38,7 @@ build()
 
 ### Add a complete application
 
-You can register an entire Express application and make it work with Fastify. Remember, `fastify-express` is just `express` under the covers and requires the same body parsers as you'd use in `express`.
+You can register an entire Express application and make it work with Fastify. Remember, `@fastify/express` is just `express` under the covers and requires the same body parsers as you'd use in `express`.
 
 ```js
 // index.js
@@ -76,7 +76,7 @@ router.use('*', (req, res) => {
   res.json({ msg: 'not found'})
 })
 
-fastify.register(require('fastify-express'))
+fastify.register(require('@fastify/express'))
   .after(() => {
     fastify.use(express.urlencoded({extended: false})) // for Postman x-www-form-urlencoded
     fastify.use(express.json())
@@ -114,7 +114,7 @@ const fastify = require('fastify')()
 fastify.register(subsystem)
 
 async function subsystem (fastify, opts) {
-  await fastify.register(require('fastify-express'))
+  await fastify.register(require('@fastify/express'))
   fastify.use(require('cors')())
 }
 ```
@@ -124,7 +124,7 @@ async function subsystem (fastify, opts) {
 const fastify = require('fastify')()
 
 fastify
-  .register(require('fastify-express'))
+  .register(require('@fastify/express'))
   .register(subsystem)
 
 async function subsystem (fastify, opts) {
@@ -141,7 +141,7 @@ Take a look at the [Lifecycle](https://www.fastify.io/docs/latest/Lifecycle/) do
 const fastify = require('fastify')()
 
 fastify
-  .register(require('fastify-express'))
+  .register(require('@fastify/express'))
   .register(subsystem)
 
 async function subsystem (fastify, opts) {
@@ -170,7 +170,7 @@ const path = require('path')
 const serveStatic = require('serve-static')
 
 fastify
-  .register(require('fastify-express'))
+  .register(require('@fastify/express'))
   .register(subsystem)
 
 async function subsystem (fastify, opts) {
@@ -189,7 +189,7 @@ async function subsystem (fastify, opts) {
 
 To use this module with TypeScript, make sure to install `@types/express`.
 
-You will need to add `"types": ["fastify-express"]` to your tsconfig.json file when using `require` to import the plugin.
+You will need to add `"types": ["@fastify/express"]` to your tsconfig.json file when using `require` to import the plugin.
 
 ## Middlewares alternatives
 
@@ -197,9 +197,9 @@ Fastify offers some alternatives to the most commonly used middlewares, followin
 
 | Express Middleware | Fastify Plugin |
 | ------------- |---------------|
-| [`helmet`](https://github.com/helmetjs/helmet) | [`fastify-helmet`](https://github.com/fastify/fastify-helmet) |
-| [`cors`](https://github.com/expressjs/cors) | [`fastify-cors`](https://github.com/fastify/fastify-cors) |
-| [`serve-static`](https://github.com/expressjs/serve-static) | [`fastify-static`](https://github.com/fastify/fastify-static) |
+| [`helmet`](https://github.com/helmetjs/helmet) | [`@fastify/helmet`](https://github.com/fastify/fastify-helmet) |
+| [`cors`](https://github.com/expressjs/cors) | [`@fastify/cors`](https://github.com/fastify/fastify-cors) |
+| [`serve-static`](https://github.com/expressjs/serve-static) | [`@fastify/static`](https://github.com/fastify/fastify-static) |
 
 ## License
 
