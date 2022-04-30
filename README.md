@@ -7,8 +7,17 @@
 
 This plugin adds full [Express](http://expressjs.com) compatibility to Fastify, it exposes the same `use` function of Express, and it allows you to use any Express middleware or application.<br/>
 
-| **Note**   |  This plugin should not be used as a long-term solution, it aims to help you have a smooth transition from Express to Fastify, but you should migrate your Express specific code to Fastify over time.  |
-| ----   |  :----  |
+<table>
+  <tbody>
+    <tr>
+      <td rowspan="2"><b>Note</b></td>
+      <td><b>This plugin should not be used as a long-term solution, it aims to help you have a smooth transition from Express to Fastify, but you should migrate your Express specific code to Fastify over time.</b></td>
+    </tr>
+    <tr>
+      <td><b>Since <a href="https://github.com/expressjs/express/issues/2761">Express does not support Node.js core HTTP/2 module</a>, this plugin does not support HTTP/2 too.</b></td>
+    </tr>
+  <tbody>
+</table>
 
 ## Install
 ```
