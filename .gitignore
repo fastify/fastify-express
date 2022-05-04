@@ -128,3 +128,4 @@ yarn.lock
 # editor files
 .vscode
 .idea
+.history

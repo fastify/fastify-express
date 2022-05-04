@@ -6,14 +6,18 @@ const Express = require('express')
 const kMiddlewares = Symbol('fastify-express-middlewares')
 
 function expressPlugin (fastify, options, next) {
+  const {
+    expressHook = 'onRequest'
+  } = options
+
   fastify.decorate('use', use)
   fastify[kMiddlewares] = []
   fastify.decorate('express', Express())
   fastify.express.disable('x-powered-by')
 
   fastify
-    .addHook('onRequest', enhanceRequest)
-    .addHook('onRequest', runConnect)
+    .addHook(expressHook, enhanceRequest)
+    .addHook(expressHook, runConnect)
     .addHook('onRegister', onRegister)
 
   function use (path, fn) {
@@ -38,6 +42,15 @@ function expressPlugin (fastify, options, next) {
     req.raw.ips = req.ips
     req.raw.log = req.log
     reply.raw.log = req.log
+
+    // backward compatibility for body-parser
+    if (req.body) {
+      req.raw.body = req.body
+    }
+    // backward compatibility for cookie-parser
+    if (req.cookies) {
+      req.raw.cookies = req.cookies
+    }
 
     const originalProtocol = req.raw.protocol
     // Make it lazy as it does a bit of work
