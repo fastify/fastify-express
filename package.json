@@ -29,8 +29,8 @@
     "@types/node": "*",
     "body-parser": "^1.20.0",
     "cors": "^2.8.5",
-    "fastify": "^3.0.0",
-    "fastify-formbody": "^5.3.0",
+    "fastify": "^4.0.0-rc.3",
+    "@fastify/formbody": "^7.0.1",
     "helmet": "^5.0.0",
     "passport": "^0.6.0",
     "passport-http-bearer": "^1.0.1",
@@ -43,9 +43,6 @@
   "dependencies": {
     "express": "^4.17.1",
     "fastify-plugin": "^3.0.0"
-  },
-  "engines": {
-    "node": ">=10.0.0"
   },
   "tsd": {
     "directory": "test/types"
