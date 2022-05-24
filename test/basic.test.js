@@ -22,7 +22,7 @@ test('Should support connect style middlewares', t => {
     return { hello: 'world' }
   })
 
-  fastify.listen(0, (err, address) => {
+  fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
     sget({
       method: 'GET',
@@ -32,7 +32,7 @@ test('Should support connect style middlewares', t => {
       t.match(res.headers, {
         'access-control-allow-origin': '*'
       })
-      t.deepEqual(JSON.parse(data), { hello: 'world' })
+      t.same(JSON.parse(data), { hello: 'world' })
     })
   })
 })
@@ -49,7 +49,7 @@ test('Should support connect style middlewares (async await)', async t => {
     return { hello: 'world' }
   })
 
-  const address = await fastify.listen(0)
+  const address = await fastify.listen({ port: 0 })
   return new Promise((resolve, reject) => {
     sget({
       method: 'GET',
@@ -59,7 +59,7 @@ test('Should support connect style middlewares (async await)', async t => {
       t.match(res.headers, {
         'access-control-allow-origin': '*'
       })
-      t.deepEqual(JSON.parse(data), { hello: 'world' })
+      t.same(JSON.parse(data), { hello: 'world' })
       resolve()
     })
   })
@@ -78,7 +78,7 @@ test('Should support connect style middlewares (async await after)', async t => 
     return { hello: 'world' }
   })
 
-  const address = await fastify.listen(0)
+  const address = await fastify.listen({ port: 0 })
   return new Promise((resolve, reject) => {
     sget({
       method: 'GET',
@@ -88,7 +88,7 @@ test('Should support connect style middlewares (async await after)', async t => 
       t.match(res.headers, {
         'access-control-allow-origin': '*'
       })
-      t.deepEqual(JSON.parse(data), { hello: 'world' })
+      t.same(JSON.parse(data), { hello: 'world' })
       resolve()
     })
   })
@@ -111,7 +111,7 @@ test('Should support per path middlewares', t => {
     return { hello: 'world' }
   })
 
-  fastify.listen(0, (err, address) => {
+  fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
     sget({
       method: 'GET',
@@ -139,7 +139,7 @@ test('Should support complex middlewares', t => {
   const fastify = Fastify()
 
   passport.use(new Strategy((token, cb) => {
-    t.strictEqual(token, '123456789')
+    t.equal(token, '123456789')
     cb(null, { token })
   }))
 
@@ -148,10 +148,10 @@ test('Should support complex middlewares', t => {
     .after(() => { fastify.use(passport.authenticate('bearer', { session: false })) })
   fastify
     .get('/', (req, reply) => {
-      t.deepEqual(req.raw.user, { token: '123456789' })
+      t.same(req.raw.user, { token: '123456789' })
       reply.send('ok')
     })
-    .listen(0, (err, address) => {
+    .listen({ port: 0 }, (err, address) => {
       t.error(err)
       sget({
         method: 'GET',
@@ -186,7 +186,7 @@ test('Encapsulation support / 1', t => {
     reply.send('ok')
   })
 
-  fastify.listen(0, (err, address) => {
+  fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
     sget({
       method: 'GET',
@@ -222,7 +222,7 @@ test('Encapsulation support / 2', t => {
     reply.send('ok')
   })
 
-  fastify.listen(0, (err, address) => {
+  fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
     sget({
       method: 'GET',
@@ -260,7 +260,7 @@ test('Encapsulation support / 3', t => {
     reply.send('ok')
   })
 
-  fastify.listen(0, (err, address) => {
+  fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
     sget({
       method: 'GET',
@@ -309,7 +309,7 @@ test('Encapsulation support / 4', t => {
     reply.send('ok')
   })
 
-  fastify.listen(0, (err, address) => {
+  fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
     sget({
       method: 'GET',
@@ -378,7 +378,7 @@ test('Encapsulation support / 5', t => {
     reply.send('ok')
   })
 
-  fastify.listen(0, (err, address) => {
+  fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
     sget({
       method: 'GET',
@@ -449,7 +449,7 @@ test('Middleware chain', t => {
     return { hello: 'world' }
   })
 
-  fastify.listen(0, (err, address) => {
+  fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
     sget({
       method: 'GET',
@@ -461,17 +461,17 @@ test('Middleware chain', t => {
   })
 
   function middleware1 (req, res, next) {
-    t.strictEqual(order.shift(), 1)
+    t.equal(order.shift(), 1)
     next()
   }
 
   function middleware2 (req, res, next) {
-    t.strictEqual(order.shift(), 2)
+    t.equal(order.shift(), 2)
     next()
   }
 
   function middleware3 (req, res, next) {
-    t.strictEqual(order.shift(), 3)
+    t.equal(order.shift(), 3)
     next()
   }
 })
@@ -495,32 +495,32 @@ test('Middleware chain (with errors) / 1', t => {
     return { hello: 'world' }
   })
 
-  fastify.listen(0, (err, address) => {
+  fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
     sget({
       method: 'GET',
       url: address
     }, (err, res, data) => {
       t.error(err)
-      t.strictEqual(res.statusCode, 500)
+      t.equal(res.statusCode, 500)
       fastify.close()
     })
   })
 
   function middleware1 (req, res, next) {
-    t.strictEqual(order.shift(), 1)
+    t.equal(order.shift(), 1)
     next(new Error('middleware1'))
   }
 
   function middleware2 (err, req, res, next) {
-    t.is(err.message, 'middleware1')
-    t.strictEqual(order.shift(), 2)
+    t.equal(err.message, 'middleware1')
+    t.equal(order.shift(), 2)
     next(new Error('middleware2'))
   }
 
   function middleware3 (err, req, res, next) {
-    t.is(err.message, 'middleware2')
-    t.strictEqual(order.shift(), 3)
+    t.equal(err.message, 'middleware2')
+    t.equal(order.shift(), 3)
     next(new Error('kaboom'))
   }
 })
@@ -532,7 +532,7 @@ test('Middleware chain (with errors) / 2', t => {
   const fastify = Fastify()
 
   fastify.setErrorHandler((err, req, reply) => {
-    t.is(err.message, 'middleware2')
+    t.equal(err.message, 'middleware2')
     reply.send(err)
   })
 
@@ -549,26 +549,26 @@ test('Middleware chain (with errors) / 2', t => {
     return { hello: 'world' }
   })
 
-  fastify.listen(0, (err, address) => {
+  fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
     sget({
       method: 'GET',
       url: address
     }, (err, res, data) => {
       t.error(err)
-      t.strictEqual(res.statusCode, 500)
+      t.equal(res.statusCode, 500)
       fastify.close()
     })
   })
 
   function middleware1 (req, res, next) {
-    t.strictEqual(order.shift(), 1)
+    t.equal(order.shift(), 1)
     next(new Error('middleware1'))
   }
 
   function middleware2 (err, req, res, next) {
-    t.is(err.message, 'middleware1')
-    t.strictEqual(order.shift(), 2)
+    t.equal(err.message, 'middleware1')
+    t.equal(order.shift(), 2)
     next(new Error('middleware2'))
   }
 
@@ -615,7 +615,7 @@ test('Send a response from a middleware', t => {
     t.fail('We should not be here')
   })
 
-  fastify.listen(0, (err, address) => {
+  fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
     sget({
       method: 'GET',
@@ -623,7 +623,7 @@ test('Send a response from a middleware', t => {
       json: true
     }, (err, res, data) => {
       t.error(err)
-      t.deepEqual(data, { hello: 'world' })
+      t.same(data, { hello: 'world' })
       fastify.close()
     })
   })
@@ -657,15 +657,15 @@ test('Should support plugin level prefix', t => {
     next()
   }, { prefix: '/hello' })
 
-  fastify.listen(0, (err, address) => {
+  fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
     sget({
       method: 'GET',
       url: address + '/hello/world'
     }, (err, res, data) => {
       t.error(err)
-      t.strictEqual(res.headers['x-foo'], 'bar')
-      t.deepEqual(JSON.parse(data), { hello: 'world' })
+      t.equal(res.headers['x-foo'], 'bar')
+      t.same(JSON.parse(data), { hello: 'world' })
     })
   })
 })
