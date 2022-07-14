@@ -15,6 +15,6 @@ declare module 'fastify' {
   }
 }
 
-export const fastifyExpress: FastifyPluginCallback
+declare const fastifyExpress: FastifyPluginCallback
 
 export default fastifyExpress
