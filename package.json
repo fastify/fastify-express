@@ -42,7 +42,7 @@
   },
   "dependencies": {
     "express": "^4.17.1",
-    "fastify-plugin": "^3.0.0"
+    "fastify-plugin": "^4.0.0"
   },
   "tsd": {
     "directory": "test/types"
