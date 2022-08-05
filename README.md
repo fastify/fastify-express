@@ -40,7 +40,7 @@ async function build () {
 }
 
 build()
-  .then(fastify => fastify.listen(3000))
+  .then(fastify => fastify.listen({ port: 3000 }))
   .catch(console.log)
 ```
 
@@ -92,7 +92,7 @@ fastify.register(require('@fastify/express'))
     fastify.use(router)
   })
 
-fastify.listen(3000, console.log)
+fastify.listen({ port: 3000 }, console.log)
 ```
 
 #### Testing Your App
