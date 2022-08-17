@@ -221,7 +221,7 @@ Example application:
 ```js
 const Fastify = require('fastify')
 const Express = require('express')
-const expressPlugin = require('fastify-express')
+const expressPlugin = require('@fastify/express')
 const bodyParser = require('body-parser')
 
 const fastify = Fastify()
@@ -239,21 +239,21 @@ fastify.post('/hello', (req, reply) => {
 })
 ```
 
-For this case, you need to remove `body-parser`, install `fastify-formbody` and change `fastify-express` options:
+For this case, you need to remove `body-parser`, install `@fastify/formbody` and change `@fastify/express` options:
 
 
 ```js
 const Fastify = require('fastify')
 const Express = require('express')
-const expressPlugin = require('fastify-express')
-const fastifyFormBody = require('fastify-formbody')
+const expressPlugin = require('@fastify/express')
+const fastifyFormBody = require('@fastify/formbody')
 
 const fastify = Fastify()
 const express = Express()
 
 await fastify.register(fastifyFormBody)
 await fastify.register(expressPlugin, {
-  // run express after `fastify-formbody` logic
+  // run express after `@fastify/formbody` logic
   expressHook: 'preHandler'
 })
 
