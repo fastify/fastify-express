@@ -44,6 +44,9 @@
     "express": "^4.17.1",
     "fastify-plugin": "^4.0.0"
   },
+  "peerDependencies": {
+    "fastify": "^4"
+  },
   "tsd": {
     "directory": "test/types"
   },
