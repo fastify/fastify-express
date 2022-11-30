@@ -4,7 +4,7 @@ const fp = require('fastify-plugin')
 const Express = require('express')
 const kMiddlewares = Symbol('fastify-express-middlewares')
 
-function expressPlugin (fastify, options, next) {
+function fastifyExpress (fastify, options, next) {
   const {
     expressHook = 'onRequest'
   } = options
@@ -87,7 +87,9 @@ function expressPlugin (fastify, options, next) {
   next()
 }
 
-module.exports = fp(expressPlugin, {
+module.exports = fp(fastifyExpress, {
   fastify: '4.x',
   name: '@fastify/express'
 })
+module.exports.default = fastifyExpress
+module.exports.fastifyExpress = fastifyExpress
