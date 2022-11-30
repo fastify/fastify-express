@@ -3,9 +3,12 @@
   "version": "2.1.0",
   "description": "Express compatibility layer for Fastify",
   "main": "index.js",
-  "types": "index.d.ts",
+  "types": "types/index.d.ts",
   "scripts": {
-    "test": "standard && tap --no-coverage test/*.test.js && tsd"
+    "lint": "standard",
+    "test": "npm run test:unit && npm run test:typescript",
+    "test:unit": "tap",
+    "test:typescript": "tsd"
   },
   "repository": {
     "type": "git",
@@ -25,12 +28,12 @@
   },
   "homepage": "https://github.com/fastify/fastify-express#readme",
   "devDependencies": {
+    "@fastify/formbody": "^7.0.1",
     "@types/express": "^4.17.1",
     "@types/node": "*",
     "body-parser": "^1.20.0",
     "cors": "^2.8.5",
     "fastify": "^4.0.0-rc.3",
-    "@fastify/formbody": "^7.0.1",
     "helmet": "^6.0.0",
     "passport": "^0.6.0",
     "passport-http-bearer": "^1.0.1",
