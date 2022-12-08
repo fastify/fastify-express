@@ -6,7 +6,8 @@ const kMiddlewares = Symbol('fastify-express-middlewares')
 
 function fastifyExpress (fastify, options, next) {
   const {
-    expressHook = 'onRequest'
+    expressHook = 'onRequest',
+    createProxyHandler
   } = options
 
   fastify.decorate('use', use)
@@ -34,6 +35,11 @@ function fastifyExpress (fastify, options, next) {
   }
 
   function enhanceRequest (req, reply, next) {
+    // Allow attaching custom Proxy handlers to Express req
+    if (typeof createProxyHandler === 'function') {
+      req.raw = new Proxy(req.raw, createProxyHandler(req))
+    }
+
     req.raw.originalUrl = req.raw.url
     req.raw.id = req.id
     req.raw.hostname = req.hostname
