@@ -1,4 +1,4 @@
-import Fastify, {FastifyRequest} from 'fastify'
+import Fastify, { FastifyRequest } from 'fastify'
 import fastifyExpress from '..'
 import { expectType } from "tsd"
 import { Application } from 'express'
@@ -21,6 +21,6 @@ expectType<Application>(app.express)
 
 app.express.disable('x-powered-by')
 
-app.use('/world', (req, res) => {
+app.use('/world', (_req, res) => {
   res.sendStatus(200)
 })
