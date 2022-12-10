@@ -5,7 +5,6 @@ import { Application } from 'express'
 
 const app = Fastify()
 
-app.decorateRequest('testTsd', '')
 app.register(fastifyExpress)
 app.register(fastifyExpress, {
   expressHook: 'onRequest',
