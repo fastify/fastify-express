@@ -193,6 +193,27 @@ async function subsystem (fastify, opts) {
 }
 ```
 
+### Wrap Express req in Proxy
+
+It is possible to wrap the Express request object in a Proxy by passing `createProxyHandler` function to generate the Proxy handler. The function will receive the Fastify request object as the first parameter.
+
+For example using Proxy to expose something from Fastify request into the Express request.
+
+```js
+fastify.decorateRequest('welcomeMessage', 'Hello World');
+fastify.register(expressPlugin, {
+  createProxyHandler: fastifyRequest => ({
+    get (target, prop) {
+      if (prop === 'welcomeMessage') {
+        return fastifyRequest[prop]
+      }
+
+      return target[prop]
+    }
+  })
+})
+```
+
 ## TypeScript support
 
 To use this module with TypeScript, make sure to install `@types/express`.

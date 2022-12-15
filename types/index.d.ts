@@ -1,5 +1,5 @@
-import { Application } from 'express'
-import { FastifyPluginCallback } from 'fastify'
+import { Application, Request } from 'express'
+import { FastifyPluginCallback, FastifyRequest } from 'fastify'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -21,6 +21,7 @@ declare namespace fastifyExpress {
   
   export interface FastifyExpressOptions {
     expressHook?: string;
+    createProxyHandler?: (fastifyReq: FastifyRequest) => ProxyHandler<Request>
   }
 
   export const fastifyExpress: FastifyExpress
