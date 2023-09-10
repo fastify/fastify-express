@@ -174,7 +174,7 @@ If you need to run a middleware only under certain path(s), just pass the path a
 
 ```js
 const fastify = require('fastify')()
-const path = require('path')
+const path = require('node:path')
 const serveStatic = require('serve-static')
 
 fastify
