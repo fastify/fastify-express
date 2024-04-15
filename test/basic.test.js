@@ -578,7 +578,7 @@ test('Middleware chain (with errors) / 2', t => {
 })
 
 test('Send a response from a middleware', t => {
-  t.plan(4)
+  t.plan(5)
 
   const fastify = Fastify()
 
@@ -602,8 +602,9 @@ test('Send a response from a middleware', t => {
     t.fail('We should not be here')
   })
 
-  fastify.addHook('onSend', (req, reply, next) => {
-    t.fail('We should not be here')
+  fastify.addHook('onSend', (req, reply, payload, next) => {
+    t.ok('called')
+    next(null, payload)
   })
 
   fastify.addHook('onResponse', (req, reply, next) => {
