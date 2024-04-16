@@ -40,13 +40,19 @@ function fastifyExpress (fastify, options, next) {
       req.raw = new Proxy(req.raw, createProxyHandler(req))
     }
 
-    req.raw.originalUrl = req.raw.url
+    const { url } = req.raw
+    req.raw.originalUrl = url
     req.raw.id = req.id
     req.raw.hostname = req.hostname
     req.raw.ip = req.ip
     req.raw.ips = req.ips
     req.raw.log = req.log
     reply.raw.log = req.log
+    reply.raw.send = function send (...args) {
+      // Restore req.raw.url to its original value https://github.com/fastify/fastify-express/issues/11
+      req.raw.url = url
+      return reply.send.apply(reply, args)
+    }
 
     // backward compatibility for body-parser
     if (req.body) {

@@ -253,7 +253,7 @@ test('middlewares with prefix', t => {
 })
 
 test('res.end should block middleware execution', t => {
-  t.plan(5)
+  t.plan(6)
 
   const instance = fastify()
   t.teardown(instance.close)
@@ -278,7 +278,8 @@ test('res.end should block middleware execution', t => {
   })
 
   instance.addHook('onSend', (req, reply, payload, next) => {
-    t.fail('this should not be called')
+    t.ok('called')
+    next(null, payload)
   })
 
   instance.addHook('onResponse', (request, reply, next) => {
