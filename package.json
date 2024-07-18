@@ -29,7 +29,7 @@
   },
   "homepage": "https://github.com/fastify/fastify-express#readme",
   "devDependencies": {
-    "@fastify/formbody": "^5.0.0-pre.fv5.2",
+    "@fastify/formbody": "^8.0.0-pre.fv5.2",
     "@types/express": "^4.17.21",
     "@types/node": "*",
     "body-parser": "^1.20.2",
