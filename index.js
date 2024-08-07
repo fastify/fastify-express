@@ -100,7 +100,7 @@ function fastifyExpress (fastify, options, next) {
 }
 
 module.exports = fp(fastifyExpress, {
-  fastify: '4.x',
+  fastify: '5.x',
   name: '@fastify/express'
 })
 module.exports.default = fastifyExpress
