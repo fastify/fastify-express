@@ -5,10 +5,7 @@ const Express = require('express')
 const kMiddlewares = Symbol('fastify-express-middlewares')
 
 function fastifyExpress (fastify, options, next) {
-  const {
-    expressHook = 'onRequest',
-    createProxyHandler
-  } = options
+  const { expressHook = 'onRequest', createProxyHandler } = options
 
   fastify.decorate('use', use)
   fastify[kMiddlewares] = []
@@ -73,14 +70,34 @@ function fastifyExpress (fastify, options, next) {
     next()
   }
 
+  /**
+   * only run middleware on routes that have not been registered with fastify
+   * middleware should be run as hooks with fastify routes for performance reasons
+   * and for compatibility with fastify.inject
+   */
   function runConnect (req, reply, next) {
-    if (this[kMiddlewares].length > 0) {
-      for (const [headerName, headerValue] of Object.entries(reply.getHeaders())) {
+    const hasRoute = req.server.hasRoute({
+      url: req.routeOptions.url,
+      method: req.routeOptions.method
+    })
+    if (
+      this[kMiddlewares].length > 0 &&
+      (!hasRoute || req.routeOptions.config.useExpressMiddleware)
+    ) {
+      for (const [headerName, headerValue] of Object.entries(
+        reply.getHeaders()
+      )) {
         reply.raw.setHeader(headerName, headerValue)
       }
 
+      req.log.debug(
+        `[fastify-express] running express middleware on route {url: ${req.routeOptions.url}, method: ${req.routeOptions.method}`
+      )
       this.express(req.raw, reply.raw, next)
     } else {
+      req.log.debug(
+        `[fastify-express] skipping express middleware on route {url: ${req.routeOptions.url}, method: ${req.routeOptions.method}`
+      )
       next()
     }
   }
