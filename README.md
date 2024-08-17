@@ -1,3 +1,15 @@
+# @pushpress/fastify-express
+
+forked from [fastify/fastify-express](github.com/fastify/fastify-express) with the following changes:
+
+- express middleware on a fastify route is deprecated and opt in only since it is incompatible with light-my-request http injection
+  and networkless http
+
+## Motivation for fork
+
+- We primarily use fastify express to mount existing express applications on fastify. We do not rely heavily on middleware that can not easily be replaced by fastify compatible lifecycle hooks. Express behavior and fastify behavior are separate.
+- We want to leverage networkless http by default between fastify routes. To keep the implementation simple and reduce the chance of errors, all fastify routes will not run through the express instanace mounted by the plugin which breaks compatibility with fastify's native support for http injection.
+
 # @fastify/express
 
 ![CI](https://github.com/fastify/fastify-express/workflows/CI/badge.svg)
@@ -19,29 +31,32 @@ This plugin adds full [Express](http://expressjs.com) compatibility to Fastify, 
 </table>
 
 ## Install
+
 ```
 npm i @fastify/express
 ```
 
 ## Usage
-Register the plugin and start using your Express middlewares.
-```js
-const Fastify = require('fastify')
 
-async function build () {
-  const fastify = Fastify()
-  await fastify.register(require('@fastify/express'))
+Register the plugin and start using your Express middlewares.
+
+```js
+const Fastify = require("fastify");
+
+async function build() {
+  const fastify = Fastify();
+  await fastify.register(require("@fastify/express"));
   // do you know we also have cors support?
   // https://github.com/fastify/fastify-cors
-  fastify.use(require('cors')())
+  fastify.use(require("cors")());
   // express.Application is also accessible
-  fastify.express.disabled('x-powered-by') // true
-  return fastify
+  fastify.express.disabled("x-powered-by"); // true
+  return fastify;
 }
 
 build()
-  .then(fastify => fastify.listen({ port: 3000 }))
-  .catch(console.log)
+  .then((fastify) => fastify.listen({ port: 3000 }))
+  .catch(console.log);
 ```
 
 ### Add a complete application
@@ -50,52 +65,52 @@ You can register an entire Express application and make it work with Fastify. Re
 
 ```js
 // index.js
-const fastify = require('fastify')()
-const express = require('express')
-const router = express.Router()
+const fastify = require("fastify")();
+const express = require("express");
+const router = express.Router();
 
 router.use(function (req, res, next) {
-  res.setHeader('x-custom', true)
-  next()
-})
+  res.setHeader("x-custom", true);
+  next();
+});
 
-router.get('/hello', (req, res) => {
-  res.status(201)
-  res.json({ hello: 'world' })
-})
+router.get("/hello", (req, res) => {
+  res.status(201);
+  res.json({ hello: "world" });
+});
 
-router.get('/foo', (req, res) => {
-  res.status(400)
-  res.json({ foo: 'bar' })
-})
+router.get("/foo", (req, res) => {
+  res.status(400);
+  res.json({ foo: "bar" });
+});
 
-router.patch('/bar', (req, res) => {
+router.patch("/bar", (req, res) => {
   if (!req.body || Object.keys(req.body).length === 0) {
-    res.status(400)
-    res.json({ msg: 'no req.body'})
+    res.status(400);
+    res.json({ msg: "no req.body" });
   } else {
-    res.status(200)
-    res.json(req.body)
+    res.status(200);
+    res.json(req.body);
   }
-})
+});
 
-router.use('*', (req, res) => {
-  res.status(404)
-  res.json({ msg: 'not found'})
-})
+router.use("*", (req, res) => {
+  res.status(404);
+  res.json({ msg: "not found" });
+});
 
-fastify.register(require('@fastify/express'))
-  .after(() => {
-    fastify.use(express.urlencoded({extended: false})) // for Postman x-www-form-urlencoded
-    fastify.use(express.json())
+fastify.register(require("@fastify/express")).after(() => {
+  fastify.use(express.urlencoded({ extended: false })); // for Postman x-www-form-urlencoded
+  fastify.use(express.json());
 
-    fastify.use(router)
-  })
+  fastify.use(router);
+});
 
-fastify.listen({ port: 3000 }, console.log)
+fastify.listen({ port: 3000 }, console.log);
 ```
 
 #### Testing Your App
+
 Run `node index.js` to start your server. Then run the following commands to ensure your server is working. Use the optional `-v` flag in curl for verbose output.
 
 ```bash
@@ -105,38 +120,38 @@ me@computer ~ % curl -X GET http://localhost:3000/foo
 {"foo":"bar"}%
 me@computer ~ % curl -X GET http://localhost:3000/bar
 {"msg":"not found"}%
-me@computer ~ % curl -X PATCH -H 'content-type:application/json' http://localhost:3000/bar  
+me@computer ~ % curl -X PATCH -H 'content-type:application/json' http://localhost:3000/bar
 {"msg":"no req.body"}%
 me@computer ~ % curl -X PATCH -H 'content-type:application/json' -d '{"foo2":"bar2"}' http://localhost:3000/bar
-{"foo2":"bar2"}%  
+{"foo2":"bar2"}%
 ```
 
 ### Encapsulation support
 
 The encapsulation works as usual with Fastify, you can register the plugin in a subsystem and your express code will work only inside there, or you can declare the express plugin top level and register a middleware in a nested plugin, and the middleware will be executed only for the nested routes of the specific plugin.
 
-*Register the plugin in its own subsystem:*
+_Register the plugin in its own subsystem:_
+
 ```js
-const fastify = require('fastify')()
+const fastify = require("fastify")();
 
-fastify.register(subsystem)
+fastify.register(subsystem);
 
-async function subsystem (fastify, opts) {
-  await fastify.register(require('@fastify/express'))
-  fastify.use(require('cors')())
+async function subsystem(fastify, opts) {
+  await fastify.register(require("@fastify/express"));
+  fastify.use(require("cors")());
 }
 ```
 
-*Register a middleware in a specific plugin:*
+_Register a middleware in a specific plugin:_
+
 ```js
-const fastify = require('fastify')()
+const fastify = require("fastify")();
 
-fastify
-  .register(require('@fastify/express'))
-  .register(subsystem)
+fastify.register(require("@fastify/express")).register(subsystem);
 
-async function subsystem (fastify, opts) {
-  fastify.use(require('cors')())
+async function subsystem(fastify, opts) {
+  fastify.use(require("cors")());
 }
 ```
 
@@ -146,25 +161,23 @@ Every registered middleware will be run during the `onRequest` hook phase, so th
 Take a look at the [Lifecycle](https://fastify.dev/docs/latest/Reference/Lifecycle) documentation page to understand better how every request is executed.
 
 ```js
-const fastify = require('fastify')()
+const fastify = require("fastify")();
 
-fastify
-  .register(require('@fastify/express'))
-  .register(subsystem)
+fastify.register(require("@fastify/express")).register(subsystem);
 
-async function subsystem (fastify, opts) {
-  fastify.addHook('onRequest', async (req, reply) => {
-    console.log('first')
-  })
+async function subsystem(fastify, opts) {
+  fastify.addHook("onRequest", async (req, reply) => {
+    console.log("first");
+  });
 
   fastify.use((req, res, next) => {
-    console.log('second')
-    next()
-  })
+    console.log("second");
+    next();
+  });
 
-  fastify.addHook('onRequest', async (req, reply) => {
-    console.log('third')
-  })
+  fastify.addHook("onRequest", async (req, reply) => {
+    console.log("third");
+  });
 }
 ```
 
@@ -173,23 +186,21 @@ async function subsystem (fastify, opts) {
 If you need to run a middleware only under certain path(s), just pass the path as first parameter to use and you are done!
 
 ```js
-const fastify = require('fastify')()
-const path = require('node:path')
-const serveStatic = require('serve-static')
+const fastify = require("fastify")();
+const path = require("node:path");
+const serveStatic = require("serve-static");
 
-fastify
-  .register(require('@fastify/express'))
-  .register(subsystem)
+fastify.register(require("@fastify/express")).register(subsystem);
 
-async function subsystem (fastify, opts) {
+async function subsystem(fastify, opts) {
   // Single path
-  fastify.use('/css', serveStatic(path.join(__dirname, '/assets')))
+  fastify.use("/css", serveStatic(path.join(__dirname, "/assets")));
 
   // Wildcard path
-  fastify.use('/css/*', serveStatic(path.join(__dirname, '/assets')))
+  fastify.use("/css/*", serveStatic(path.join(__dirname, "/assets")));
 
   // Multiple paths
-  fastify.use(['/css', '/js'], serveStatic(path.join(__dirname, '/assets')))
+  fastify.use(["/css", "/js"], serveStatic(path.join(__dirname, "/assets")));
 }
 ```
 
@@ -200,18 +211,18 @@ It is possible to wrap the Express request object in a Proxy by passing `createP
 For example using Proxy to expose something from Fastify request into the Express request.
 
 ```js
-fastify.decorateRequest('welcomeMessage', 'Hello World');
+fastify.decorateRequest("welcomeMessage", "Hello World");
 fastify.register(expressPlugin, {
-  createProxyHandler: fastifyRequest => ({
-    get (target, prop) {
-      if (prop === 'welcomeMessage') {
-        return fastifyRequest[prop]
+  createProxyHandler: (fastifyRequest) => ({
+    get(target, prop) {
+      if (prop === "welcomeMessage") {
+        return fastifyRequest[prop];
       }
 
-      return target[prop]
-    }
-  })
-})
+      return target[prop];
+    },
+  }),
+});
 ```
 
 ## TypeScript support
@@ -224,10 +235,10 @@ You will need to add `"types": ["@fastify/express"]` to your tsconfig.json file 
 
 Fastify offers some alternatives to the most commonly used middlewares, following, you can find a list.
 
-| Express Middleware | Fastify Plugin |
-| ------------- |---------------|
-| [`helmet`](https://github.com/helmetjs/helmet) | [`@fastify/helmet`](https://github.com/fastify/fastify-helmet) |
-| [`cors`](https://github.com/expressjs/cors) | [`@fastify/cors`](https://github.com/fastify/fastify-cors) |
+| Express Middleware                                          | Fastify Plugin                                                 |
+| ----------------------------------------------------------- | -------------------------------------------------------------- |
+| [`helmet`](https://github.com/helmetjs/helmet)              | [`@fastify/helmet`](https://github.com/fastify/fastify-helmet) |
+| [`cors`](https://github.com/expressjs/cors)                 | [`@fastify/cors`](https://github.com/fastify/fastify-cors)     |
 | [`serve-static`](https://github.com/expressjs/serve-static) | [`@fastify/static`](https://github.com/fastify/fastify-static) |
 
 ## Troubleshooting
@@ -240,50 +251,49 @@ Any POST requests with **body**, which `body-parser` will try to parse, will be 
 Example application:
 
 ```js
-const Fastify = require('fastify')
-const Express = require('express')
-const expressPlugin = require('@fastify/express')
-const bodyParser = require('body-parser')
+const Fastify = require("fastify");
+const Express = require("express");
+const expressPlugin = require("@fastify/express");
+const bodyParser = require("body-parser");
 
-const fastify = Fastify()
-const express = Express()
+const fastify = Fastify();
+const express = Express();
 
-express.use(bodyParser.urlencoded({ extended: false }))
+express.use(bodyParser.urlencoded({ extended: false }));
 
-await fastify.register(expressPlugin)
+await fastify.register(expressPlugin);
 
-fastify.use(express)
+fastify.use(express);
 
 // this route will never reply
-fastify.post('/hello', (req, reply) => {
-  return { hello: 'world' }
-})
+fastify.post("/hello", (req, reply) => {
+  return { hello: "world" };
+});
 ```
 
 For this case, you need to remove `body-parser`, install `@fastify/formbody` and change `@fastify/express` options:
 
-
 ```js
-const Fastify = require('fastify')
-const Express = require('express')
-const expressPlugin = require('@fastify/express')
-const fastifyFormBody = require('@fastify/formbody')
+const Fastify = require("fastify");
+const Express = require("express");
+const expressPlugin = require("@fastify/express");
+const fastifyFormBody = require("@fastify/formbody");
 
-const fastify = Fastify()
-const express = Express()
+const fastify = Fastify();
+const express = Express();
 
-await fastify.register(fastifyFormBody)
+await fastify.register(fastifyFormBody);
 await fastify.register(expressPlugin, {
   // run express after `@fastify/formbody` logic
-  expressHook: 'preHandler'
-})
+  expressHook: "preHandler",
+});
 
-fastify.use(express)
+fastify.use(express);
 
 // it works!
-fastify.post('/hello', (req, reply) => {
-  return { hello: 'world' }
-})
+fastify.post("/hello", (req, reply) => {
+  return { hello: "world" };
+});
 ```
 
 ## License
