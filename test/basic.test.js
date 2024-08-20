@@ -9,35 +9,42 @@ const Strategy = require('passport-http-bearer').Strategy
 
 const expressPlugin = require('../index')
 
-test('Should support connect style middlewares', t => {
+test('Should support connect style middlewares', (t) => {
   t.plan(4)
   const fastify = Fastify()
   t.teardown(fastify.close)
 
-  fastify
-    .register(expressPlugin)
-    .after(() => { fastify.use(cors()) })
-
-  fastify.get('/', async (req, reply) => {
-    return { hello: 'world' }
+  fastify.register(expressPlugin).after(() => {
+    fastify.use(cors())
   })
+
+  fastify.get(
+    '/',
+    { config: { useExpressMiddleware: true } },
+    async (req, reply) => {
+      return { hello: 'world' }
+    }
+  )
 
   fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
-    sget({
-      method: 'GET',
-      url: address
-    }, (err, res, data) => {
-      t.error(err)
-      t.match(res.headers, {
-        'access-control-allow-origin': '*'
-      })
-      t.same(JSON.parse(data), { hello: 'world' })
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.match(res.headers, {
+          'access-control-allow-origin': '*'
+        })
+        t.same(JSON.parse(data), { hello: 'world' })
+      }
+    )
   })
 })
 
-test('Should support connect style middlewares (async await)', async t => {
+test('Should support connect style middlewares (async await)', async (t) => {
   t.plan(3)
   const fastify = Fastify()
   t.teardown(fastify.close)
@@ -45,27 +52,34 @@ test('Should support connect style middlewares (async await)', async t => {
   await fastify.register(expressPlugin)
   fastify.use(cors())
 
-  fastify.get('/', async (req, reply) => {
-    return { hello: 'world' }
-  })
+  fastify.get(
+    '/',
+    { config: { useExpressMiddleware: true } },
+    async (req, reply) => {
+      return { hello: 'world' }
+    }
+  )
 
   const address = await fastify.listen({ port: 0 })
   return new Promise((resolve, reject) => {
-    sget({
-      method: 'GET',
-      url: address
-    }, (err, res, data) => {
-      t.error(err)
-      t.match(res.headers, {
-        'access-control-allow-origin': '*'
-      })
-      t.same(JSON.parse(data), { hello: 'world' })
-      resolve()
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.match(res.headers, {
+          'access-control-allow-origin': '*'
+        })
+        t.same(JSON.parse(data), { hello: 'world' })
+        resolve()
+      }
+    )
   })
 })
 
-test('Should support connect style middlewares (async await after)', async t => {
+test('Should support connect style middlewares (async await after)', async (t) => {
   t.plan(3)
   const fastify = Fastify()
   t.teardown(fastify.close)
@@ -74,127 +88,161 @@ test('Should support connect style middlewares (async await after)', async t => 
   await fastify.after()
   fastify.use(cors())
 
-  fastify.get('/', async (req, reply) => {
-    return { hello: 'world' }
-  })
+  fastify.get(
+    '/',
+    { config: { useExpressMiddleware: true } },
+    async (req, reply) => {
+      return { hello: 'world' }
+    }
+  )
 
   const address = await fastify.listen({ port: 0 })
   return new Promise((resolve, reject) => {
-    sget({
-      method: 'GET',
-      url: address
-    }, (err, res, data) => {
-      t.error(err)
-      t.match(res.headers, {
-        'access-control-allow-origin': '*'
-      })
-      t.same(JSON.parse(data), { hello: 'world' })
-      resolve()
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.match(res.headers, {
+          'access-control-allow-origin': '*'
+        })
+        t.same(JSON.parse(data), { hello: 'world' })
+        resolve()
+      }
+    )
   })
 })
 
-test('Should support per path middlewares', t => {
+test('Should support per path middlewares', (t) => {
   t.plan(5)
   const fastify = Fastify()
   t.teardown(fastify.close)
 
-  fastify
-    .register(expressPlugin)
-    .after(() => { fastify.use('/cors', cors()) })
-
-  fastify.get('/cors/hello', async (req, reply) => {
-    return { hello: 'world' }
+  fastify.register(expressPlugin).after(() => {
+    fastify.use('/cors', cors())
   })
 
-  fastify.get('/', async (req, reply) => {
-    return { hello: 'world' }
-  })
+  fastify.get(
+    '/cors/hello',
+    { config: { useExpressMiddleware: true } },
+    async (req, reply) => {
+      return { hello: 'world' }
+    }
+  )
+
+  fastify.get(
+    '/',
+    { config: { useExpressMiddleware: true } },
+    async (req, reply) => {
+      return { hello: 'world' }
+    }
+  )
 
   fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
-    sget({
-      method: 'GET',
-      url: address + '/cors/hello'
-    }, (err, res, data) => {
-      t.error(err)
-      t.match(res.headers, {
-        'access-control-allow-origin': '*'
-      })
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address + '/cors/hello'
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.match(res.headers, {
+          'access-control-allow-origin': '*'
+        })
+      }
+    )
 
-    sget({
-      method: 'GET',
-      url: address
-    }, (err, res, data) => {
-      t.error(err)
-      t.notOk(res.headers['access-control-allow-origin'])
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.notOk(res.headers['access-control-allow-origin'])
+      }
+    )
   })
 })
 
-test('Should support complex middlewares', t => {
+test('Should support complex middlewares', (t) => {
   t.plan(4)
 
   const fastify = Fastify()
 
-  passport.use(new Strategy((token, cb) => {
-    t.equal(token, '123456789')
-    cb(null, { token })
-  }))
+  passport.use(
+    new Strategy((token, cb) => {
+      t.equal(token, '123456789')
+      cb(null, { token })
+    })
+  )
 
+  fastify.register(expressPlugin).after(() => {
+    fastify.use(passport.authenticate('bearer', { session: false }))
+  })
   fastify
-    .register(expressPlugin)
-    .after(() => { fastify.use(passport.authenticate('bearer', { session: false })) })
-  fastify
-    .get('/', (req, reply) => {
+    .get('/', { config: { useExpressMiddleware: true } }, (req, reply) => {
       t.same(req.raw.user, { token: '123456789' })
       reply.send('ok')
     })
     .listen({ port: 0 }, (err, address) => {
       t.error(err)
-      sget({
-        method: 'GET',
-        url: address,
-        headers: {
-          authorization: 'Bearer 123456789'
+      sget(
+        {
+          method: 'GET',
+          url: address,
+          headers: {
+            authorization: 'Bearer 123456789'
+          }
+        },
+        (err, res, data) => {
+          t.error(err)
+          fastify.close()
         }
-      }, (err, res, data) => {
-        t.error(err)
-        fastify.close()
-      })
+      )
     })
 })
 
-test('Encapsulation support / 1', t => {
+test('Encapsulation support / 1', (t) => {
   t.plan(2)
 
   const fastify = Fastify()
 
   fastify.register((instance, opts, next) => {
-    instance.register(expressPlugin)
-      .after(() => { instance.use(middleware) })
-
-    instance.get('/plugin', (req, reply) => {
-      reply.send('ok')
+    instance.register(expressPlugin).after(() => {
+      instance.use(middleware)
     })
+
+    instance.get(
+      '/plugin',
+      { config: { useExpressMiddleware: true } },
+      (req, reply) => {
+        reply.send('ok')
+      }
+    )
 
     next()
   })
 
-  fastify.get('/', (req, reply) => {
+  fastify.get('/', { config: { useExpressMiddleware: true } }, (req, reply) => {
     reply.send('ok')
   })
 
   fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
-    sget({
-      method: 'GET',
-      url: address
-    }, (err, res, data) => {
-      t.error(err)
-      fastify.close()
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address
+      },
+      (err, res, data) => {
+        t.error(err)
+        fastify.close()
+      }
+    )
   })
 
   function middleware (req, res, next) {
@@ -202,7 +250,7 @@ test('Encapsulation support / 1', t => {
   }
 })
 
-test('Encapsulation support / 2', t => {
+test('Encapsulation support / 2', (t) => {
   t.plan(2)
 
   const fastify = Fastify()
@@ -211,26 +259,33 @@ test('Encapsulation support / 2', t => {
 
   fastify.register((instance, opts, next) => {
     instance.use(middleware)
-    instance.get('/plugin', (req, reply) => {
-      reply.send('ok')
-    })
+    instance.get(
+      '/plugin',
+      { config: { useExpressMiddleware: true } },
+      (req, reply) => {
+        reply.send('ok')
+      }
+    )
 
     next()
   })
 
-  fastify.get('/', (req, reply) => {
+  fastify.get('/', { config: { useExpressMiddleware: true } }, (req, reply) => {
     reply.send('ok')
   })
 
   fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
-    sget({
-      method: 'GET',
-      url: address
-    }, (err, res, data) => {
-      t.error(err)
-      fastify.close()
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address
+      },
+      (err, res, data) => {
+        t.error(err)
+        fastify.close()
+      }
+    )
   })
 
   function middleware (req, res, next) {
@@ -238,7 +293,7 @@ test('Encapsulation support / 2', t => {
   }
 })
 
-test('Encapsulation support / 3', t => {
+test('Encapsulation support / 3', (t) => {
   t.plan(5)
 
   const fastify = Fastify()
@@ -249,42 +304,52 @@ test('Encapsulation support / 3', t => {
 
   fastify.register((instance, opts, next) => {
     instance.use(cors())
-    instance.get('/plugin', (req, reply) => {
-      reply.send('ok')
-    })
+    instance.get(
+      '/plugin',
+      { config: { useExpressMiddleware: true } },
+      (req, reply) => {
+        reply.send('ok')
+      }
+    )
 
     next()
   })
 
-  fastify.get('/', (req, reply) => {
+  fastify.get('/', { config: { useExpressMiddleware: true } }, (req, reply) => {
     reply.send('ok')
   })
 
   fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
-    sget({
-      method: 'GET',
-      url: address + '/plugin'
-    }, (err, res, data) => {
-      t.error(err)
-      t.match(res.headers, {
-        'access-control-allow-origin': '*'
-      })
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address + '/plugin'
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.match(res.headers, {
+          'access-control-allow-origin': '*'
+        })
+      }
+    )
 
-    sget({
-      method: 'GET',
-      url: address
-    }, (err, res, data) => {
-      t.error(err)
-      t.notMatch(res.headers, {
-        'access-control-allow-origin': '*'
-      })
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.notMatch(res.headers, {
+          'access-control-allow-origin': '*'
+        })
+      }
+    )
   })
 })
 
-test('Encapsulation support / 4', t => {
+test('Encapsulation support / 4', (t) => {
   t.plan(5)
 
   const fastify = Fastify()
@@ -298,39 +363,49 @@ test('Encapsulation support / 4', t => {
 
   fastify.register((instance, opts, next) => {
     instance.use(middleware2)
-    instance.get('/plugin', (req, reply) => {
-      reply.send('ok')
-    })
+    instance.get(
+      '/plugin',
+      { config: { useExpressMiddleware: true } },
+      (req, reply) => {
+        reply.send('ok')
+      }
+    )
 
     next()
   })
 
-  fastify.get('/', (req, reply) => {
+  fastify.get('/', { config: { useExpressMiddleware: true } }, (req, reply) => {
     reply.send('ok')
   })
 
   fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
-    sget({
-      method: 'GET',
-      url: address + '/plugin'
-    }, (err, res, data) => {
-      t.error(err)
-      t.match(res.headers, {
-        'x-middleware-1': 'true',
-        'x-middleware-2': 'true'
-      })
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address + '/plugin'
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.match(res.headers, {
+          'x-middleware-1': 'true',
+          'x-middleware-2': 'true'
+        })
+      }
+    )
 
-    sget({
-      method: 'GET',
-      url: address
-    }, (err, res, data) => {
-      t.error(err)
-      t.match(res.headers, {
-        'x-middleware-1': 'true'
-      })
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.match(res.headers, {
+          'x-middleware-1': 'true'
+        })
+      }
+    )
   })
 
   function middleware1 (req, res, next) {
@@ -344,7 +419,7 @@ test('Encapsulation support / 4', t => {
   }
 })
 
-test('Encapsulation support / 5', t => {
+test('Encapsulation support / 5', (t) => {
   t.plan(7)
 
   const fastify = Fastify()
@@ -356,62 +431,82 @@ test('Encapsulation support / 5', t => {
     fastify.use(middleware1)
   })
 
-  fastify.register((instance, opts, next) => {
-    instance.use(middleware2)
-    instance.get('/', (req, reply) => {
-      reply.send('ok')
-    })
+  fastify.register(
+    (instance, opts, next) => {
+      instance.use(middleware2)
+      instance.get(
+        '/',
+        { config: { useExpressMiddleware: true } },
+        (req, reply) => {
+          reply.send('ok')
+        }
+      )
 
-    instance.register((i, opts, next) => {
-      i.use(middleware3)
-      i.get('/nested', (req, reply) => {
-        reply.send('ok')
+      instance.register((i, opts, next) => {
+        i.use(middleware3)
+        i.get(
+          '/nested',
+          { config: { useExpressMiddleware: true } },
+          (req, reply) => {
+            reply.send('ok')
+          }
+        )
+
+        next()
       })
 
       next()
-    })
+    },
+    { prefix: '/plugin' }
+  )
 
-    next()
-  }, { prefix: '/plugin' })
-
-  fastify.get('/', (req, reply) => {
+  fastify.get('/', { config: { useExpressMiddleware: true } }, (req, reply) => {
     reply.send('ok')
   })
 
   fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
-    sget({
-      method: 'GET',
-      url: address + '/plugin/nested'
-    }, (err, res, data) => {
-      t.error(err)
-      t.match(res.headers, {
-        'x-middleware-1': 'true',
-        'x-middleware-2': 'true',
-        'x-middleware-3': 'true'
-      })
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address + '/plugin/nested'
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.match(res.headers, {
+          'x-middleware-1': 'true',
+          'x-middleware-2': 'true',
+          'x-middleware-3': 'true'
+        })
+      }
+    )
 
-    sget({
-      method: 'GET',
-      url: address + '/plugin'
-    }, (err, res, data) => {
-      t.error(err)
-      t.match(res.headers, {
-        'x-middleware-1': 'true',
-        'x-middleware-2': 'true'
-      })
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address + '/plugin'
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.match(res.headers, {
+          'x-middleware-1': 'true',
+          'x-middleware-2': 'true'
+        })
+      }
+    )
 
-    sget({
-      method: 'GET',
-      url: address
-    }, (err, res, data) => {
-      t.error(err)
-      t.match(res.headers, {
-        'x-middleware-1': 'true'
-      })
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.match(res.headers, {
+          'x-middleware-1': 'true'
+        })
+      }
+    )
   })
 
   function middleware1 (req, res, next) {
@@ -430,34 +525,36 @@ test('Encapsulation support / 5', t => {
   }
 })
 
-test('Middleware chain', t => {
+test('Middleware chain', (t) => {
   t.plan(5)
 
   const order = [1, 2, 3]
   const fastify = Fastify()
 
-  fastify
-    .register(expressPlugin)
-    .after(() => {
-      fastify
-        .use(middleware1)
-        .use(middleware2)
-        .use(middleware3)
-    })
-
-  fastify.get('/', async (req, reply) => {
-    return { hello: 'world' }
+  fastify.register(expressPlugin).after(() => {
+    fastify.use(middleware1).use(middleware2).use(middleware3)
   })
+
+  fastify.get(
+    '/',
+    { config: { useExpressMiddleware: true } },
+    async (req, reply) => {
+      return { hello: 'world' }
+    }
+  )
 
   fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
-    sget({
-      method: 'GET',
-      url: address
-    }, (err, res, data) => {
-      t.error(err)
-      fastify.close()
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address
+      },
+      (err, res, data) => {
+        t.error(err)
+        fastify.close()
+      }
+    )
   })
 
   function middleware1 (req, res, next) {
@@ -476,35 +573,37 @@ test('Middleware chain', t => {
   }
 })
 
-test('Middleware chain (with errors) / 1', t => {
+test('Middleware chain (with errors) / 1', (t) => {
   t.plan(8)
 
   const order = [1, 2, 3]
   const fastify = Fastify()
 
-  fastify
-    .register(expressPlugin)
-    .after(() => {
-      fastify
-        .use(middleware1)
-        .use(middleware2)
-        .use(middleware3)
-    })
-
-  fastify.get('/', async (req, reply) => {
-    return { hello: 'world' }
+  fastify.register(expressPlugin).after(() => {
+    fastify.use(middleware1).use(middleware2).use(middleware3)
   })
+
+  fastify.get(
+    '/',
+    { config: { useExpressMiddleware: true } },
+    async (req, reply) => {
+      return { hello: 'world' }
+    }
+  )
 
   fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
-    sget({
-      method: 'GET',
-      url: address
-    }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 500)
-      fastify.close()
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.equal(res.statusCode, 500)
+        fastify.close()
+      }
+    )
   })
 
   function middleware1 (req, res, next) {
@@ -525,7 +624,7 @@ test('Middleware chain (with errors) / 1', t => {
   }
 })
 
-test('Middleware chain (with errors) / 2', t => {
+test('Middleware chain (with errors) / 2', (t) => {
   t.plan(7)
 
   const order = [1, 2]
@@ -536,29 +635,31 @@ test('Middleware chain (with errors) / 2', t => {
     reply.send(err)
   })
 
-  fastify
-    .register(expressPlugin)
-    .after(() => {
-      fastify
-        .use(middleware1)
-        .use(middleware2)
-        .use(middleware3)
-    })
-
-  fastify.get('/', async (req, reply) => {
-    return { hello: 'world' }
+  fastify.register(expressPlugin).after(() => {
+    fastify.use(middleware1).use(middleware2).use(middleware3)
   })
+
+  fastify.get(
+    '/',
+    { config: { useExpressMiddleware: true } },
+    async (req, reply) => {
+      return { hello: 'world' }
+    }
+  )
 
   fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
-    sget({
-      method: 'GET',
-      url: address
-    }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 500)
-      fastify.close()
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.equal(res.statusCode, 500)
+        fastify.close()
+      }
+    )
   })
 
   function middleware1 (req, res, next) {
@@ -577,18 +678,14 @@ test('Middleware chain (with errors) / 2', t => {
   }
 })
 
-test('Send a response from a middleware', t => {
+test('Send a response from a middleware', (t) => {
   t.plan(5)
 
   const fastify = Fastify()
 
-  fastify
-    .register(expressPlugin)
-    .after(() => {
-      fastify
-        .use(middleware1)
-        .use(middleware2)
-    })
+  fastify.register(expressPlugin).after(() => {
+    fastify.use(middleware1).use(middleware2)
+  })
 
   fastify.addHook('preValidation', (req, reply, next) => {
     t.fail('We should not be here')
@@ -612,21 +709,24 @@ test('Send a response from a middleware', t => {
     next()
   })
 
-  fastify.get('/', (req, reply) => {
+  fastify.get('/', { config: { useExpressMiddleware: true } }, (req, reply) => {
     t.fail('We should not be here')
   })
 
   fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
-    sget({
-      method: 'GET',
-      url: address,
-      json: true
-    }, (err, res, data) => {
-      t.error(err)
-      t.same(data, { hello: 'world' })
-      fastify.close()
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address,
+        json: true
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.same(data, { hello: 'world' })
+        fastify.close()
+      }
+    )
   })
 
   function middleware1 (req, res, next) {
@@ -638,35 +738,45 @@ test('Send a response from a middleware', t => {
   }
 })
 
-test('Should support plugin level prefix', t => {
+test('Should support plugin level prefix', (t) => {
   t.plan(4)
   const fastify = Fastify()
   t.teardown(fastify.close)
 
   fastify.register(expressPlugin)
 
-  fastify.register((instance, opts, next) => {
-    instance.use('/world', (req, res, next) => {
-      res.setHeader('x-foo', 'bar')
+  fastify.register(
+    (instance, opts, next) => {
+      instance.use('/world', (req, res, next) => {
+        res.setHeader('x-foo', 'bar')
+        next()
+      })
+
+      instance.get(
+        '/world',
+        { config: { useExpressMiddleware: true } },
+        (req, reply) => {
+          reply.send({ hello: 'world' })
+        }
+      )
+
       next()
-    })
-
-    instance.get('/world', (req, reply) => {
-      reply.send({ hello: 'world' })
-    })
-
-    next()
-  }, { prefix: '/hello' })
+    },
+    { prefix: '/hello' }
+  )
 
   fastify.listen({ port: 0 }, (err, address) => {
     t.error(err)
-    sget({
-      method: 'GET',
-      url: address + '/hello/world'
-    }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.headers['x-foo'], 'bar')
-      t.same(JSON.parse(data), { hello: 'world' })
-    })
+    sget(
+      {
+        method: 'GET',
+        url: address + '/hello/world'
+      },
+      (err, res, data) => {
+        t.error(err)
+        t.equal(res.headers['x-foo'], 'bar')
+        t.same(JSON.parse(data), { hello: 'world' })
+      }
+    )
   })
 })

@@ -5,15 +5,14 @@ const Fastify = require('fastify')
 const express = require('express')
 const expressPlugin = require('../index')
 
-test('onSend hook should receive valid request and reply objects if middleware fails', t => {
+test('onSend hook should receive valid request and reply objects if middleware fails', (t) => {
   t.plan(4)
   const fastify = Fastify()
-  fastify.register(expressPlugin)
-    .after(() => {
-      fastify.use(function (req, res, next) {
-        next(new Error('middlware failed'))
-      })
+  fastify.register(expressPlugin).after(() => {
+    fastify.use(function (req, res, next) {
+      next(new Error('middlware failed'))
     })
+  })
 
   fastify.decorateRequest('testDecorator', 'testDecoratorVal')
   fastify.decorateReply('testDecorator', 'testDecoratorVal')
@@ -24,20 +23,23 @@ test('onSend hook should receive valid request and reply objects if middleware f
     next()
   })
 
-  fastify.get('/', (req, reply) => {
+  fastify.get('/', { config: { useExpressMiddleware: true } }, (req, reply) => {
     reply.send('hello')
   })
 
-  fastify.inject({
-    method: 'GET',
-    url: '/'
-  }, (err, res) => {
-    t.error(err)
-    t.equal(res.statusCode, 500)
-  })
+  fastify.inject(
+    {
+      method: 'GET',
+      url: '/'
+    },
+    (err, res) => {
+      t.error(err)
+      t.equal(res.statusCode, 500)
+    }
+  )
 })
 
-test('request.url is not mutated between onRequest and onResponse', t => {
+test('request.url is not mutated between onRequest and onResponse', (t) => {
   t.plan(4)
   const fastify = Fastify()
   const targetUrl = '/hubba/bubba'
@@ -62,11 +64,14 @@ test('request.url is not mutated between onRequest and onResponse', t => {
     fastify.use(mainRouter)
   })
 
-  fastify.inject({
-    method: 'GET',
-    url: targetUrl
-  }, (err, res) => {
-    t.error(err)
-    t.equal(res.statusCode, 200)
-  })
+  fastify.inject(
+    {
+      method: 'GET',
+      url: targetUrl
+    },
+    (err, res) => {
+      t.error(err)
+      t.equal(res.statusCode, 200)
+    }
+  )
 })
