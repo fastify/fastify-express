@@ -90,9 +90,11 @@ function fastifyExpress(fastify, options, next) {
         reply.raw.setHeader(headerName, headerValue);
       }
 
-      req.log.debug(
-        `[fastify-express] running express middleware on route {url: ${req.routeOptions.url}, method: ${req.routeOptions.method}`,
-      );
+      if (req.routeOptions.url && req.routeOptions.method) {
+        req.log.debug(
+          `[fastify-express] running express middleware on route {url: ${req.routeOptions.url}, method: ${req.routeOptions.method}`,
+        );
+      }
       this.express(req.raw, reply.raw, next);
     } else {
       req.log.debug(
