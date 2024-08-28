@@ -1,6 +1,6 @@
 {
   "name": "@pushpress/fastify-express",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Express compatibility layer for Fastify",
   "main": "index.js",
   "type": "commonjs",
