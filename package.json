@@ -30,7 +30,7 @@
   "homepage": "https://github.com/fastify/fastify-express#readme",
   "devDependencies": {
     "@fastify/formbody": "^8.0.0",
-    "@types/express": "^4.17.21",
+    "@types/express": "^5.0.0",
     "@types/node": "*",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
