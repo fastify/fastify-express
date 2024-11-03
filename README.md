@@ -105,10 +105,10 @@ me@computer ~ % curl -X GET http://localhost:3000/foo
 {"foo":"bar"}%
 me@computer ~ % curl -X GET http://localhost:3000/bar
 {"msg":"not found"}%
-me@computer ~ % curl -X PATCH -H 'content-type:application/json' http://localhost:3000/bar  
+me@computer ~ % curl -X PATCH -H 'content-type:application/json' http://localhost:3000/bar
 {"msg":"no req.body"}%
 me@computer ~ % curl -X PATCH -H 'content-type:application/json' -d '{"foo2":"bar2"}' http://localhost:3000/bar
-{"foo2":"bar2"}%  
+{"foo2":"bar2"}%
 ```
 
 ### Encapsulation support
@@ -142,7 +142,7 @@ async function subsystem (fastify, opts) {
 
 ### Hooks and middlewares
 
-Every registered middleware will be run during the `onRequest` hook phase, so the registration order is important.  
+Every registered middleware will be run during the `onRequest` hook phase, so the registration order is important.
 Take a look at the [Lifecycle](https://fastify.dev/docs/latest/Reference/Lifecycle) documentation page to understand better how every request is executed.
 
 ```js

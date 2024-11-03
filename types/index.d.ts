@@ -18,7 +18,7 @@ declare module 'fastify' {
 type FastifyExpress = FastifyPluginCallback<fastifyExpress.FastifyExpressOptions>
 
 declare namespace fastifyExpress {
-  
+
   export interface FastifyExpressOptions {
     expressHook?: string;
     createProxyHandler?: (fastifyReq: FastifyRequest) => ProxyHandler<Request>
