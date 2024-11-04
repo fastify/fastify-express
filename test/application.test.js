@@ -1,17 +1,16 @@
 'use strict'
 
-const { test } = require('tap')
+const { test } = require('node:test')
 const Fastify = require('fastify')
 const Express = require('express')
 const sget = require('simple-get').concat
 
 const expressPlugin = require('../index')
 
-test('Register express application', t => {
+test('Register express application', (t, done) => {
   t.plan(5)
   const fastify = Fastify()
   const express = Express()
-  t.teardown(fastify.close)
 
   express.use(function (req, res, next) {
     res.setHeader('x-custom', true)
@@ -27,23 +26,24 @@ test('Register express application', t => {
     .after(() => { fastify.use(express) })
 
   fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
+    t.assert.ifError(err)
     sget({
       method: 'GET',
       url: address + '/hello'
     }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 201)
-      t.match(res.headers, { 'x-custom': 'true' })
-      t.same(JSON.parse(data), { hello: 'world' })
+      t.assert.ifError(err)
+      t.assert.strictEqual(res.statusCode, 201)
+      t.assert.strictEqual(res.headers['x-custom'], 'true')
+      t.assert.deepStrictEqual(JSON.parse(data), { hello: 'world' })
+      fastify.close()
+      done()
     })
   })
 })
 
-test('Register express application that uses Router', t => {
+test('Register express application that uses Router', (t, done) => {
   t.plan(9)
   const fastify = Fastify()
-  t.teardown(fastify.close)
 
   const router = Express.Router()
 
@@ -66,32 +66,33 @@ test('Register express application that uses Router', t => {
     .after(() => { fastify.use(router) })
 
   fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
+    t.assert.ifError(err)
     sget({
       method: 'GET',
       url: address + '/hello'
     }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 201)
-      t.match(res.headers, { 'x-custom': 'true' })
-      t.same(JSON.parse(data), { hello: 'world' })
+      t.assert.ifError(err)
+      t.assert.strictEqual(res.statusCode, 201)
+      t.assert.strictEqual(res.headers['x-custom'], 'true')
+      t.assert.deepStrictEqual(JSON.parse(data), { hello: 'world' })
     })
     sget({
       method: 'GET',
       url: address + '/foo'
     }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 400)
-      t.match(res.headers, { 'x-custom': 'true' })
-      t.same(JSON.parse(data), { foo: 'bar' })
+      t.assert.ifError(err)
+      t.assert.strictEqual(res.statusCode, 400)
+      t.assert.strictEqual(res.headers['x-custom'], 'true')
+      t.assert.deepStrictEqual(JSON.parse(data), { foo: 'bar' })
+      fastify.close()
+      done()
     })
   })
 })
 
-test('Should remove x-powered-by header', t => {
+test('Should remove x-powered-by header', (t, done) => {
   t.plan(3)
   const fastify = Fastify()
-  t.teardown(fastify.close)
 
   const router = Express.Router()
 
@@ -105,21 +106,22 @@ test('Should remove x-powered-by header', t => {
     .after(() => { fastify.use(router) })
 
   fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
+    t.assert.ifError(err)
     sget({
       method: 'GET',
       url: address
     }, (err, res) => {
-      t.error(err)
-      t.equal(res.headers['x-powered-by'], undefined)
+      t.assert.ifError(err)
+      t.assert.strictEqual(res.headers['x-powered-by'], undefined)
+      fastify.close()
+      done()
     })
   })
 })
 
-test('Should expose the express app on the fastify instance', t => {
+test('Should expose the express app on the fastify instance', (t, done) => {
   t.plan(3)
   const fastify = Fastify()
-  t.teardown(fastify.close)
 
   const router = Express.Router()
 
@@ -133,21 +135,22 @@ test('Should expose the express app on the fastify instance', t => {
     .after(() => { fastify.use(router) })
 
   fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
+    t.assert.ifError(err)
     sget({
       method: 'GET',
       url: address
     }, (err, res) => {
-      t.error(err)
-      t.equal(fastify.express.disabled('x-powered-by'), true)
+      t.assert.ifError(err)
+      t.assert.strictEqual(fastify.express.disabled('x-powered-by'), true)
+      fastify.close()
+      done()
     })
   })
 })
 
-test('Should flush headers if express handles request', t => {
+test('Should flush headers if express handles request', (t, done) => {
   t.plan(3)
   const fastify = Fastify()
-  t.teardown(fastify.close)
 
   fastify.addHook('onRequest', (_, reply, done) => {
     reply.header('foo', 'bar')
@@ -167,13 +170,15 @@ test('Should flush headers if express handles request', t => {
     .after(() => { fastify.use(router) })
 
   fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
+    t.assert.ifError(err)
     sget({
       method: 'GET',
       url: address
     }, (err, res) => {
-      t.error(err)
-      t.equal(res.headers.foo, 'bar')
+      t.assert.ifError(err)
+      t.assert.strictEqual(res.headers.foo, 'bar')
+      fastify.close()
+      done()
     })
   })
 })
