@@ -6,7 +6,8 @@
   "type": "commonjs",
   "types": "types/index.d.ts",
   "scripts": {
-    "lint": "standard",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
     "test": "npm run test:unit && npm run test:typescript",
     "test:unit": "tap",
     "test:typescript": "tsd"
@@ -36,11 +37,11 @@
     "cors": "^2.8.5",
     "fastify": "^5.0.0",
     "helmet": "^8.0.0",
+    "neostandard": "^0.11.9",
     "passport": "^0.7.0",
     "passport-http-bearer": "^1.0.1",
     "serve-static": "^1.15.0",
     "simple-get": "^4.0.1",
-    "standard": "^17.1.0",
     "tap": "^21.0.0",
     "tsd": "^0.31.0"
   },
