@@ -28,5 +28,5 @@ declare namespace fastifyExpress {
   export { fastifyExpress as default }
 }
 
-declare function fastifyExpress(...params: Parameters<FastifyExpress>): ReturnType<FastifyExpress>
+declare function fastifyExpress (...params: Parameters<FastifyExpress>): ReturnType<FastifyExpress>
 export = fastifyExpress
