@@ -1,11 +1,11 @@
 'use strict'
 
-const { test } = require('tap')
+const { test } = require('node:test')
 const Fastify = require('fastify')
 const express = require('express')
 const expressPlugin = require('../index')
 
-test('onSend hook should receive valid request and reply objects if middleware fails', t => {
+test('onSend hook should receive valid request and reply objects if middleware fails', (t, done) => {
   t.plan(4)
   const fastify = Fastify()
   fastify.register(expressPlugin)
@@ -19,8 +19,8 @@ test('onSend hook should receive valid request and reply objects if middleware f
   fastify.decorateReply('testDecorator', 'testDecoratorVal')
 
   fastify.addHook('onSend', function (request, reply, payload, next) {
-    t.equal(request.testDecorator, 'testDecoratorVal')
-    t.equal(reply.testDecorator, 'testDecoratorVal')
+    t.assert.strictEqual(request.testDecorator, 'testDecoratorVal')
+    t.assert.strictEqual(reply.testDecorator, 'testDecoratorVal')
     next()
   })
 
@@ -32,23 +32,25 @@ test('onSend hook should receive valid request and reply objects if middleware f
     method: 'GET',
     url: '/'
   }, (err, res) => {
-    t.error(err)
-    t.equal(res.statusCode, 500)
+    t.assert.ifError(err)
+    t.assert.strictEqual(res.statusCode, 500)
+    fastify.close()
+    done()
   })
 })
 
-test('request.url is not mutated between onRequest and onResponse', t => {
+test('request.url is not mutated between onRequest and onResponse', (t, done) => {
   t.plan(4)
   const fastify = Fastify()
   const targetUrl = '/hubba/bubba'
 
   fastify.addHook('onRequest', (request, _, next) => {
-    t.equal(request.url, targetUrl)
+    t.assert.strictEqual(request.url, targetUrl)
     next()
   })
 
   fastify.addHook('onResponse', (request, _, next) => {
-    t.equal(request.url, targetUrl)
+    t.assert.strictEqual(request.url, targetUrl)
     next()
   })
 
@@ -66,7 +68,9 @@ test('request.url is not mutated between onRequest and onResponse', t => {
     method: 'GET',
     url: targetUrl
   }, (err, res) => {
-    t.error(err)
-    t.equal(res.statusCode, 200)
+    t.assert.ifError(err)
+    t.assert.strictEqual(res.statusCode, 200)
+    fastify.close()
+    done()
   })
 })

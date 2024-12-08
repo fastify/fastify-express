@@ -1,6 +1,6 @@
 'use strict'
 
-const { test } = require('tap')
+const { test } = require('node:test')
 const Fastify = require('fastify')
 const fastifyFormBody = require('@fastify/formbody')
 const Express = require('express')
@@ -9,11 +9,10 @@ const sget = require('simple-get').concat
 
 const expressPlugin = require('../index')
 
-test('POST request without form body works', t => {
+test('POST request without form body works', (t, done) => {
   t.plan(5)
   const fastify = Fastify()
   const express = Express()
-  t.teardown(fastify.close)
 
   fastify.register(fastifyFormBody)
   fastify.register(expressPlugin)
@@ -22,7 +21,7 @@ test('POST request without form body works', t => {
       fastify.use(express)
       fastify.use((req, res, next) => {
         // body-parser default value
-        t.same(req.body, {})
+        t.assert.deepStrictEqual(req.body, {})
         next()
       })
     })
@@ -32,24 +31,25 @@ test('POST request without form body works', t => {
   })
 
   fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
+    t.assert.ifError(err)
     sget({
       method: 'post',
       url: address + '/hello',
       timeout: 100
     }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 200)
-      t.same(JSON.parse(data), { hello: 'world' })
+      t.assert.ifError(err)
+      t.assert.strictEqual(res.statusCode, 200)
+      t.assert.deepStrictEqual(JSON.parse(data), { hello: 'world' })
+      fastify.close()
+      done()
     })
   })
 })
 
-test('POST request with form body and without body-parser works', t => {
+test('POST request with form body and without body-parser works', (t, done) => {
   t.plan(5)
   const fastify = Fastify()
   const express = Express()
-  t.teardown(fastify.close)
 
   fastify.register(fastifyFormBody)
   fastify.register(expressPlugin)
@@ -57,7 +57,7 @@ test('POST request with form body and without body-parser works', t => {
       fastify.use(express)
       fastify.use((req, res, next) => {
         // req.body default value
-        t.equal(req.body, undefined)
+        t.assert.strictEqual(req.body, undefined)
         next()
       })
     })
@@ -67,25 +67,26 @@ test('POST request with form body and without body-parser works', t => {
   })
 
   fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
+    t.assert.ifError(err)
     sget({
       method: 'post',
       url: address + '/hello',
       form: { input: 'test' },
       timeout: 100
     }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 200)
-      t.same(JSON.parse(data), { hello: 'world' })
+      t.assert.ifError(err)
+      t.assert.strictEqual(res.statusCode, 200)
+      t.assert.deepStrictEqual(JSON.parse(data), { hello: 'world' })
+      fastify.close()
+      done()
     })
   })
 })
 
-test('POST request with form body and body-parser hangs up', t => {
+test('POST request with form body and body-parser hangs up', (t, done) => {
   t.plan(3)
   const fastify = Fastify()
   const express = Express()
-  t.teardown(fastify.close)
 
   fastify.register(fastifyFormBody)
   fastify.register(expressPlugin)
@@ -94,7 +95,7 @@ test('POST request with form body and body-parser hangs up', t => {
       fastify.use(express)
       fastify.use((req, res, next) => {
         // body-parser result
-        t.same(req.body, { input: 'test' })
+        t.assert.strictEqual(req.body.input, 'test')
         next()
       })
     })
@@ -104,23 +105,24 @@ test('POST request with form body and body-parser hangs up', t => {
   })
 
   fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
+    t.assert.ifError(err)
     sget({
       method: 'post',
       url: address + '/hello',
       form: { input: 'test' },
       timeout: 100
     }, (err, res, data) => {
-      t.equal(err.message, 'Request timed out')
+      t.assert.strictEqual(err.message, 'Request timed out')
+      fastify.close()
+      done()
     })
   })
 })
 
-test('POST request with form body and body-parser hangs up, compatibility case', t => {
+test('POST request with form body and body-parser hangs up, compatibility case', (t, done) => {
   t.plan(5)
   const fastify = Fastify()
   const express = Express()
-  t.teardown(fastify.close)
 
   fastify.register(fastifyFormBody)
   fastify.register(expressPlugin, { expressHook: 'preHandler' })
@@ -128,7 +130,7 @@ test('POST request with form body and body-parser hangs up, compatibility case',
       fastify.use(express)
       fastify.use((req, res, next) => {
         // fastify-formbody with backward compatibility result
-        t.same(req.body, { input: 'test' })
+        t.assert.deepStrictEqual(req.body.input, 'test')
         next()
       })
     })
@@ -138,16 +140,18 @@ test('POST request with form body and body-parser hangs up, compatibility case',
   })
 
   fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
+    t.assert.ifError(err)
     sget({
       method: 'post',
       url: address + '/hello',
       form: { input: 'test' },
       timeout: 100
     }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 200)
-      t.same(JSON.parse(data), { hello: 'world' })
+      t.assert.ifError(err)
+      t.assert.strictEqual(res.statusCode, 200)
+      t.assert.deepStrictEqual(JSON.parse(data), { hello: 'world' })
+      fastify.close()
+      done()
     })
   })
 })

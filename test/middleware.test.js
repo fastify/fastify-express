@@ -2,8 +2,7 @@
 
 // Original Fastify test/middlewares.test.js file
 
-const t = require('tap')
-const test = t.test
+const { test } = require('node:test')
 const sget = require('simple-get').concat
 const fastify = require('fastify')
 const fp = require('fastify-plugin')
@@ -12,18 +11,18 @@ const helmet = require('helmet')
 
 const expressPlugin = require('../index')
 
-test('use a middleware', t => {
+test('use a middleware', (t, done) => {
   t.plan(7)
 
   const instance = fastify()
   instance.register(expressPlugin)
     .after(() => {
       const useRes = instance.use(function (req, res, next) {
-        t.pass('middleware called')
+        t.assert.ok('middleware called')
         next()
       })
 
-      t.equal(useRes, instance)
+      t.assert.strictEqual(useRes, instance)
     })
 
   instance.get('/', function (request, reply) {
@@ -31,23 +30,23 @@ test('use a middleware', t => {
   })
 
   instance.listen({ port: 0 }, err => {
-    t.error(err)
-
-    t.teardown(instance.server.close.bind(instance.server))
+    t.assert.ifError(err)
 
     sget({
       method: 'GET',
       url: 'http://localhost:' + instance.server.address().port
     }, (err, response, body) => {
-      t.error(err)
-      t.equal(response.statusCode, 200)
-      t.equal(response.headers['content-length'], '' + body.length)
-      t.same(JSON.parse(body), { hello: 'world' })
+      t.assert.ifError(err)
+      t.assert.strictEqual(response.statusCode, 200)
+      t.assert.strictEqual(response.headers['content-length'], '' + body.length)
+      t.assert.deepStrictEqual(JSON.parse(body), { hello: 'world' })
+      instance.close()
+      done()
     })
   })
 })
 
-test('use cors', t => {
+test('use cors', (t, done) => {
   t.plan(3)
 
   const instance = fastify()
@@ -61,21 +60,21 @@ test('use cors', t => {
   })
 
   instance.listen({ port: 0 }, err => {
-    t.error(err)
-
-    t.teardown(instance.server.close.bind(instance.server))
+    t.assert.ifError(err)
 
     sget({
       method: 'GET',
       url: 'http://localhost:' + instance.server.address().port
     }, (err, response, body) => {
-      t.error(err)
-      t.equal(response.headers['access-control-allow-origin'], '*')
+      t.assert.ifError(err)
+      t.assert.strictEqual(response.headers['access-control-allow-origin'], '*')
+      instance.close()
+      done()
     })
   })
 })
 
-test('use helmet', t => {
+test('use helmet', (t, done) => {
   t.plan(3)
 
   const instance = fastify()
@@ -89,21 +88,21 @@ test('use helmet', t => {
   })
 
   instance.listen({ port: 0 }, err => {
-    t.error(err)
-
-    t.teardown(instance.server.close.bind(instance.server))
+    t.assert.ifError(err)
 
     sget({
       method: 'GET',
       url: 'http://localhost:' + instance.server.address().port
     }, (err, response, body) => {
-      t.error(err)
-      t.ok(response.headers['x-xss-protection'])
+      t.assert.ifError(err)
+      t.assert.ok(response.headers['x-xss-protection'])
+      instance.close()
+      done()
     })
   })
 })
 
-test('use helmet and cors', t => {
+test('use helmet and cors', (t, done) => {
   t.plan(4)
 
   const instance = fastify()
@@ -118,51 +117,49 @@ test('use helmet and cors', t => {
   })
 
   instance.listen({ port: 0 }, err => {
-    t.error(err)
-
-    t.teardown(instance.server.close.bind(instance.server))
+    t.assert.ifError(err)
 
     sget({
       method: 'GET',
       url: 'http://localhost:' + instance.server.address().port
     }, (err, response, body) => {
-      t.error(err)
-      t.ok(response.headers['x-xss-protection'])
-      t.equal(response.headers['access-control-allow-origin'], '*')
+      t.assert.ifError(err)
+      t.assert.ok(response.headers['x-xss-protection'])
+      t.assert.strictEqual(response.headers['access-control-allow-origin'], '*')
+      instance.close()
+      done()
     })
   })
 })
 
-test('middlewares with prefix', t => {
-  t.plan(5)
+test('middlewares with prefix', async t => {
+  t.plan(4)
 
   const instance = fastify()
-  instance.register(expressPlugin)
-    .after(() => {
-      instance.use(function (req, res, next) {
-        req.global = true
-        next()
-      })
-      instance.use('', function (req, res, next) {
-        req.global2 = true
-        next()
-      })
-      instance.use('/', function (req, res, next) {
-        req.root = true
-        next()
-      })
-      instance.use('/prefix', function (req, res, next) {
-        req.prefixed = true
-        next()
-      })
-      instance.use('/prefix/', function (req, res, next) {
-        req.slashed = true
-        next()
-      })
-    })
+  await instance.register(expressPlugin)
+  instance.use(function (req, res, next) {
+    req.global = true
+    next()
+  })
+  instance.use('', function (req, res, next) {
+    req.global2 = true
+    next()
+  })
+  instance.use('/', function (req, res, next) {
+    req.root = true
+    next()
+  })
+  instance.use('/prefix', function (req, res, next) {
+    req.prefixed = true
+    next()
+  })
+  instance.use('/prefix/', function (req, res, next) {
+    req.slashed = true
+    next()
+  })
 
-  function handler (request, reply) {
-    reply.send({
+  async function handler (request, reply) {
+    return reply.send({
       prefixed: request.raw.prefixed,
       slashed: request.raw.slashed,
       global: request.raw.global,
@@ -176,87 +173,88 @@ test('middlewares with prefix', t => {
   instance.get('/prefix/', handler)
   instance.get('/prefix/inner', handler)
 
-  instance.listen({ port: 0 }, err => {
-    t.error(err)
-    t.teardown(instance.server.close.bind(instance.server))
-
-    t.test('/', t => {
-      t.plan(2)
-      sget({
-        method: 'GET',
-        url: 'http://localhost:' + instance.server.address().port + '/',
-        json: true
-      }, (err, response, body) => {
-        t.error(err)
-        t.same(body, {
-          global: true,
-          global2: true,
-          root: true
-        })
+  await instance.listen({ port: 0 })
+  await instance.ready()
+  await t.test('/', (t, done) => {
+    t.plan(2)
+    sget({
+      method: 'GET',
+      url: 'http://localhost:' + instance.server.address().port + '/',
+      json: true
+    }, (err, response, body) => {
+      t.assert.ifError(err)
+      t.assert.deepStrictEqual(body, {
+        global: true,
+        global2: true,
+        root: true
       })
+      done()
     })
+  })
 
-    t.test('/prefix', t => {
-      t.plan(2)
-      sget({
-        method: 'GET',
-        url: 'http://localhost:' + instance.server.address().port + '/prefix',
-        json: true
-      }, (err, response, body) => {
-        t.error(err)
-        t.same(body, {
-          prefixed: true,
-          global: true,
-          global2: true,
-          root: true,
-          slashed: true
-        })
+  await t.test('/prefix', (t, done) => {
+    t.plan(2)
+    sget({
+      method: 'GET',
+      url: 'http://localhost:' + instance.server.address().port + '/prefix',
+      json: true
+    }, (err, response, body) => {
+      t.assert.ifError(err)
+      t.assert.deepStrictEqual(body, {
+        prefixed: true,
+        global: true,
+        global2: true,
+        root: true,
+        slashed: true
       })
+      done()
     })
+  })
 
-    t.test('/prefix/', t => {
-      t.plan(2)
-      sget({
-        method: 'GET',
-        url: 'http://localhost:' + instance.server.address().port + '/prefix/',
-        json: true
-      }, (err, response, body) => {
-        t.error(err)
-        t.same(body, {
-          prefixed: true,
-          slashed: true,
-          global: true,
-          global2: true,
-          root: true
-        })
+  await t.test('/prefix/', (t, done) => {
+    t.plan(2)
+    sget({
+      method: 'GET',
+      url: 'http://localhost:' + instance.server.address().port + '/prefix/',
+      json: true
+    }, (err, response, body) => {
+      t.assert.ifError(err)
+      t.assert.deepStrictEqual(body, {
+        prefixed: true,
+        slashed: true,
+        global: true,
+        global2: true,
+        root: true
       })
+      done()
     })
+  })
 
-    t.test('/prefix/inner', t => {
-      t.plan(2)
-      sget({
-        method: 'GET',
-        url: 'http://localhost:' + instance.server.address().port + '/prefix/inner',
-        json: true
-      }, (err, response, body) => {
-        t.error(err)
-        t.same(body, {
-          prefixed: true,
-          slashed: true,
-          global: true,
-          global2: true,
-          root: true
-        })
+  await t.test('/prefix/inner', (t, done) => {
+    t.plan(2)
+    sget({
+      method: 'GET',
+      url: 'http://localhost:' + instance.server.address().port + '/prefix/inner',
+      json: true
+    }, (err, response, body) => {
+      t.assert.ifError(err)
+      t.assert.deepStrictEqual(body, {
+        prefixed: true,
+        slashed: true,
+        global: true,
+        global2: true,
+        root: true
       })
+      instance.close()
+      done()
     })
   })
 })
 
-test('res.end should block middleware execution', t => {
+test('res.end should block middleware execution', (t, done) => {
   t.plan(6)
 
   const instance = fastify()
-  t.teardown(instance.close)
   instance.register(expressPlugin)
     .after(() => {
       instance.use(function (req, res, next) {
@@ -264,55 +262,56 @@ test('res.end should block middleware execution', t => {
       })
 
       instance.use(function (req, res, next) {
-        t.fail('we should not be here')
+        t.assert.fail('we should not be here')
       })
     })
 
   instance.addHook('onRequest', (req, res, next) => {
-    t.ok('called')
+    t.assert.ok('called')
     next()
   })
 
   instance.addHook('preHandler', (req, reply, next) => {
-    t.fail('this should not be called')
+    t.assert.fail('this should not be called')
   })
 
   instance.addHook('onSend', (req, reply, payload, next) => {
-    t.ok('called')
+    t.assert.ok('called')
     next(null, payload)
   })
 
   instance.addHook('onResponse', (request, reply, next) => {
-    t.ok('called')
+    t.assert.ok('called')
     next()
   })
 
   instance.get('/', function (request, reply) {
-    t.fail('we should no be here')
+    t.assert.fail('we should no be here')
   })
 
   instance.listen({ port: 0 }, (err, address) => {
-    t.error(err)
+    t.assert.ifError(err)
     sget({
       method: 'GET',
       url: address
     }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 200)
-      t.equal(data.toString(), 'hello')
+      t.assert.ifError(err)
+      t.assert.strictEqual(res.statusCode, 200)
+      t.assert.strictEqual(data.toString(), 'hello')
+      instance.close()
+      done()
     })
   })
 })
 
-test('Use a middleware inside a plugin after an encapsulated plugin', t => {
+test('Use a middleware inside a plugin after an encapsulated plugin', (t, done) => {
   t.plan(5)
   const f = fastify()
-  t.teardown(f.close)
   f.register(expressPlugin)
 
   f.register(function (instance, opts, next) {
     instance.use(function (req, res, next) {
-      t.ok('first middleware called')
+      t.assert.ok('first middleware called')
       next()
     })
 
@@ -325,7 +324,7 @@ test('Use a middleware inside a plugin after an encapsulated plugin', t => {
 
   f.register(fp(function (instance, opts, next) {
     instance.use(function (req, res, next) {
-      t.ok('second middleware called')
+      t.assert.ok('second middleware called')
       next()
     })
 
@@ -333,34 +332,35 @@ test('Use a middleware inside a plugin after an encapsulated plugin', t => {
   }))
 
   f.listen({ port: 0 }, (err, address) => {
-    t.error(err)
+    t.assert.ifError(err)
     sget({
       method: 'GET',
       url: address
     }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 200)
-      t.same(JSON.parse(data), { hello: 'world' })
+      t.assert.ifError(err)
+      t.assert.strictEqual(res.statusCode, 200)
+      t.assert.deepStrictEqual(JSON.parse(data), { hello: 'world' })
+      f.close()
+      done()
     })
   })
 })
 
-test('middlewares should run in the order in which they are defined', t => {
+test('middlewares should run in the order in which they are defined', (t, done) => {
   t.plan(10)
   const f = fastify()
-  t.teardown(f.close)
   f.register(expressPlugin)
 
   f.register(fp(function (instance, opts, next) {
     instance.use(function (req, res, next) {
-      t.equal(req.previous, undefined)
+      t.assert.strictEqual(req.previous, undefined)
       req.previous = 1
       next()
     })
 
     instance.register(fp(function (i, opts, next) {
       i.use(function (req, res, next) {
-        t.equal(req.previous, 2)
+        t.assert.strictEqual(req.previous, 2)
         req.previous = 3
         next()
       })
@@ -368,7 +368,7 @@ test('middlewares should run in the order in which they are defined', t => {
     }))
 
     instance.use(function (req, res, next) {
-      t.equal(req.previous, 1)
+      t.assert.strictEqual(req.previous, 1)
       req.previous = 2
       next()
     })
@@ -378,19 +378,19 @@ test('middlewares should run in the order in which they are defined', t => {
 
   f.register(function (instance, opts, next) {
     instance.use(function (req, res, next) {
-      t.equal(req.previous, 3)
+      t.assert.strictEqual(req.previous, 3)
       req.previous = 4
       next()
     })
 
     instance.get('/', function (request, reply) {
-      t.equal(request.raw.previous, 5)
+      t.assert.strictEqual(request.raw.previous, 5)
       reply.send({ hello: 'world' })
     })
 
     instance.register(fp(function (i, opts, next) {
       i.use(function (req, res, next) {
-        t.equal(req.previous, 4)
+        t.assert.strictEqual(req.previous, 4)
         req.previous = 5
         next()
       })
@@ -401,14 +401,16 @@ test('middlewares should run in the order in which they are defined', t => {
   })
 
   f.listen({ port: 0 }, (err, address) => {
-    t.error(err)
+    t.assert.ifError(err)
     sget({
       method: 'GET',
       url: address
     }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 200)
-      t.same(JSON.parse(data), { hello: 'world' })
+      t.assert.ifError(err)
+      t.assert.strictEqual(res.statusCode, 200)
+      t.assert.deepStrictEqual(JSON.parse(data), { hello: 'world' })
+      f.close()
+      done()
     })
   })
 })
