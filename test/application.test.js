@@ -13,12 +13,12 @@ test('Register express application', t => {
   const express = Express()
   t.teardown(fastify.close)
 
-  express.use(function (req, res, next) {
+  express.use(function (_req, res, next) {
     res.setHeader('x-custom', true)
     next()
   })
 
-  express.get('/hello', (req, res) => {
+  express.get('/hello', (_req, res) => {
     res.status(201)
     res.json({ hello: 'world' })
   })
@@ -47,17 +47,17 @@ test('Register express application that uses Router', t => {
 
   const router = Express.Router()
 
-  router.use(function (req, res, next) {
+  router.use(function (_req, res, next) {
     res.setHeader('x-custom', true)
     next()
   })
 
-  router.get('/hello', (req, res) => {
+  router.get('/hello', (_req, res) => {
     res.status(201)
     res.json({ hello: 'world' })
   })
 
-  router.get('/foo', (req, res) => {
+  router.get('/foo', (_req, res) => {
     res.status(400)
     res.json({ foo: 'bar' })
   })
@@ -95,7 +95,7 @@ test('Should remove x-powered-by header', t => {
 
   const router = Express.Router()
 
-  router.get('/', (req, res) => {
+  router.get('/', (_req, res) => {
     res.status(201)
     res.json({ hello: 'world' })
   })
@@ -123,7 +123,7 @@ test('Should expose the express app on the fastify instance', t => {
 
   const router = Express.Router()
 
-  router.get('/', (req, res) => {
+  router.get('/', (_req, res) => {
     res.status(201)
     res.json({ hello: 'world' })
   })
@@ -137,7 +137,7 @@ test('Should expose the express app on the fastify instance', t => {
     sget({
       method: 'GET',
       url: address
-    }, (err, res) => {
+    }, (err) => {
       t.error(err)
       t.equal(fastify.express.disabled('x-powered-by'), true)
     })
@@ -157,7 +157,7 @@ test('Should flush headers if express handles request', t => {
 
   const router = Express.Router()
 
-  router.get('/', (req, res) => {
+  router.get('/', (_req, res) => {
     res.status(201)
     res.json({ hello: 'world' })
   })

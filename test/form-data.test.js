@@ -20,14 +20,14 @@ test('POST request without form body works', t => {
     .after(() => {
       express.use(bodyParser.urlencoded({ extended: false }))
       fastify.use(express)
-      fastify.use((req, res, next) => {
+      fastify.use((req, _res, next) => {
         // body-parser default value
         t.same(req.body, {})
         next()
       })
     })
 
-  fastify.post('/hello', (req, reply) => {
+  fastify.post('/hello', () => {
     return { hello: 'world' }
   })
 
@@ -55,14 +55,14 @@ test('POST request with form body and without body-parser works', t => {
   fastify.register(expressPlugin)
     .after(() => {
       fastify.use(express)
-      fastify.use((req, res, next) => {
+      fastify.use((req, _res, next) => {
         // req.body default value
         t.equal(req.body, undefined)
         next()
       })
     })
 
-  fastify.post('/hello', (req, reply) => {
+  fastify.post('/hello', () => {
     return { hello: 'world' }
   })
 
@@ -92,14 +92,14 @@ test('POST request with form body and body-parser hangs up', t => {
     .after(() => {
       express.use(bodyParser.urlencoded({ extended: false }))
       fastify.use(express)
-      fastify.use((req, res, next) => {
+      fastify.use((req, _res, next) => {
         // body-parser result
         t.same(req.body, { input: 'test' })
         next()
       })
     })
 
-  fastify.post('/hello', (req, reply) => {
+  fastify.post('/hello', () => {
     return { hello: 'world' }
   })
 
@@ -110,7 +110,7 @@ test('POST request with form body and body-parser hangs up', t => {
       url: address + '/hello',
       form: { input: 'test' },
       timeout: 100
-    }, (err, res, data) => {
+    }, (err) => {
       t.equal(err.message, 'Request timed out')
     })
   })
@@ -126,14 +126,14 @@ test('POST request with form body and body-parser hangs up, compatibility case',
   fastify.register(expressPlugin, { expressHook: 'preHandler' })
     .after(() => {
       fastify.use(express)
-      fastify.use((req, res, next) => {
+      fastify.use((req, _res, next) => {
         // fastify-formbody with backward compatibility result
         t.same(req.body, { input: 'test' })
         next()
       })
     })
 
-  fastify.post('/hello', (req, reply) => {
+  fastify.post('/hello', () => {
     return { hello: 'world' }
   })
 
