@@ -30,7 +30,7 @@ test('Should enhance the Node.js core request/response objects', t => {
     sget({
       method: 'GET',
       url: address
-    }, (err, res, data) => {
+    }, (err) => {
       t.error(err)
     })
   })
@@ -62,7 +62,7 @@ test('trust proxy protocol', (t) => {
         'X-Forwarded-Proto': 'lorem'
       },
       url: address
-    }, (err, res, data) => {
+    }, (err) => {
       t.error(err)
     })
   })
@@ -92,14 +92,14 @@ test('passing createProxyHandler sets up a Proxy with Express req', t => {
     })
   })
     .after(() => {
-      fastify.use(function (req, res, next) {
+      fastify.use(function (req, _res, next) {
         req.customField = testString
         t.equal(req.customField, testString)
         next()
       })
     })
 
-  fastify.get('/', function (request, reply) {
+  fastify.get('/', function (_request, reply) {
     reply.send({ hello: 'world' })
   })
 
@@ -152,7 +152,7 @@ test('createProxyHandler has access to Fastify request object', t => {
     })
   })
     .after(() => {
-      fastify.use(function (req, res, next) {
+      fastify.use(function (req, _res, next) {
         t.equal(req.getAndSetFastify, startTestString)
         t.equal(req.getOnlyFastify, startTestString)
         req.getAndSetFastify = 'updated'
