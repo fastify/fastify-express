@@ -13,7 +13,7 @@ This plugin adds full [Express](http://expressjs.com) compatibility to Fastify, 
       <td><b>This plugin should not be used as a long-term solution, it aims to help you have a smooth transition from Express to Fastify, but you should migrate your Express specific code to Fastify over time.</b></td>
     </tr>
     <tr>
-      <td><b>Since <a href="https://github.com/expressjs/express/issues/2761">Express does not support Node.js core HTTP/2 module</a>, this plugin does not support HTTP/2 too.</b></td>
+      <td><b>Since <a href="https://github.com/expressjs/express/issues/2761">Express does not support Node.js core HTTP/2 module</a>, this plugin does not support HTTP/2 either.</b></td>
     </tr>
   <tbody>
 </table>
@@ -140,7 +140,7 @@ async function subsystem (fastify, opts) {
 }
 ```
 
-### Hooks and middlewares
+### Hooks and middleware
 
 Every registered middleware will be run during the `onRequest` hook phase, so the registration order is important.
 Take a look at the [Lifecycle](https://fastify.dev/docs/latest/Reference/Lifecycle) documentation page to understand better how every request is executed.
@@ -170,7 +170,7 @@ async function subsystem (fastify, opts) {
 
 ### Restrict middleware execution to a certain path(s)
 
-If you need to run a middleware only under certain path(s), just pass the path as first parameter to use and you are done!
+If you need to run a middleware only under certain path(s), just pass the path as the first parameter to use and you are done!
 
 ```js
 const fastify = require('fastify')()
@@ -197,7 +197,7 @@ async function subsystem (fastify, opts) {
 
 It is possible to wrap the Express request object in a Proxy by passing `createProxyHandler` function to generate the Proxy handler. The function will receive the Fastify request object as the first parameter.
 
-For example using Proxy to expose something from Fastify request into the Express request.
+For example, using Proxy to expose something from Fastify request into the Express request.
 
 ```js
 fastify.decorateRequest('welcomeMessage', 'Hello World');
@@ -220,9 +220,9 @@ To use this module with TypeScript, make sure to install `@types/express`.
 
 You will need to add `"types": ["@fastify/express"]` to your tsconfig.json file when using `require` to import the plugin.
 
-## Middlewares alternatives
+## Middleware alternatives
 
-Fastify offers some alternatives to the most commonly used middlewares, following, you can find a list.
+Fastify offers some alternatives to the most commonly used middleware:
 
 | Express Middleware | Fastify Plugin |
 | ------------- |---------------|
@@ -235,7 +235,7 @@ Fastify offers some alternatives to the most commonly used middlewares, followin
 ### POST request with body hangs up
 
 [body-parser](https://github.com/expressjs/body-parser) library incompatible with `fastify-express`, when you have `fastify` routes and any `express` middlewares.
-Any POST requests with **body**, which `body-parser` will try to parse, will be hangs up.
+Any POST requests with **body**, which `body-parser` will try to parse, will hang up.
 
 Example application:
 
