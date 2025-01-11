@@ -23,6 +23,19 @@ This plugin adds full [Express](http://expressjs.com) compatibility to Fastify, 
 npm i @fastify/express
 ```
 
+### Compatibility
+| Plugin version | Fastify version |
+| ---------------|-----------------|
+| `^4.x`         | `^5.x`          |
+| `^2.x`         | `^4.x`          |
+| `^1.x`         | `^3.x`          |
+| `^0.x`         | `^2.x`          |
+
+
+Please note that if a Fastify version is out of support, then so are the corresponding versions of this plugin
+in the table above.
+See [Fastify's LTS policy](https://github.com/fastify/fastify/blob/main/docs/Reference/LTS.md) for more details.
+
 ## Usage
 Register the plugin and start using your Express middlewares.
 ```js
