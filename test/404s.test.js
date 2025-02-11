@@ -52,7 +52,7 @@ test('run hooks and middleware on default 404', async t => {
     body: JSON.stringify({ hello: 'world' }),
   })
 
-  t.assert.equal(result.status, 404)
+  t.assert.deepStrictEqual(result.status, 404)
 })
 
 test('run non-encapsulated plugin hooks and middleware on default 404', async t => {
@@ -101,7 +101,7 @@ test('run non-encapsulated plugin hooks and middleware on default 404', async t 
     method: 'POST',
     body: JSON.stringify({ hello: 'world' }),
   })
-  t.assert.equal(result.status, 404)
+  t.assert.deepStrictEqual(result.status, 404)
 })
 
 test('run non-encapsulated plugin hooks and middleware on custom 404', async t => {
@@ -157,7 +157,7 @@ test('run non-encapsulated plugin hooks and middleware on custom 404', async t =
   const result = await fetch(address + '/not-found')
 
   t.assert.deepStrictEqual(await result.text(), 'this was not found')
-  t.assert.equal(result.status, 404)
+  t.assert.deepStrictEqual(result.status, 404)
 })
 
 test('run hooks and middleware with encapsulated 404', async t => {
@@ -236,7 +236,7 @@ test('run hooks and middleware with encapsulated 404', async t => {
     body: JSON.stringify({ hello: 'world' }),
   })
 
-  t.assert.equal(result.status, 404)
+  t.assert.deepStrictEqual(result.status, 404)
 })
 
 test('run middlewares on default 404', async t => {
@@ -265,7 +265,7 @@ test('run middlewares on default 404', async t => {
     body: JSON.stringify({ hello: 'world' }),
   })
 
-  t.assert.equal(result.status, 404)
+  t.assert.deepStrictEqual(result.status, 404)
 })
 
 test('run middlewares with encapsulated 404', async t => {
@@ -303,5 +303,5 @@ test('run middlewares with encapsulated 404', async t => {
     body: JSON.stringify({ hello: 'world' }),
   })
 
-  t.assert.equal(result.status, 404)
+  t.assert.deepStrictEqual(result.status, 404)
 })
