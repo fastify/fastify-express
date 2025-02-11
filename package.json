@@ -9,7 +9,7 @@
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "test": "npm run test:unit && npm run test:typescript",
-    "test:unit": "c8 --100 node --test",
+    "test:unit": "c8 --100 --reporter html node --test",
     "test:typescript": "tsd"
   },
   "repository": {

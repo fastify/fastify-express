@@ -102,6 +102,27 @@ test('use helmet and cors', async t => {
   t.assert.deepStrictEqual(result.headers.get('access-control-allow-origin'), '*')
 })
 
+test('use cors only on prefix', async t => {
+  t.plan(1)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+  instance.register((innerInstance) => {
+    innerInstance.register(expressPlugin).after(() => {
+      innerInstance.use('/', cors())
+    })
+    innerInstance.get('/', function (_request, reply) {
+      reply.send({ hello: 'world' })
+    })
+  }, { prefix: '/prefix' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const result = await fetch(address + '/prefix')
+
+  t.assert.deepStrictEqual(result.headers.get('access-control-allow-origin'), '*')
+})
+
 test('middlewares with prefix', async t => {
   t.plan(4)
 
