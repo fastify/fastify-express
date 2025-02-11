@@ -2,8 +2,7 @@
 
 // Original Fastify test/middlewares.test.js file
 
-const t = require('tap')
-const test = t.test
+const { test } = require('node:test')
 const sget = require('simple-get').concat
 const fastify = require('fastify')
 const fp = require('fastify-plugin')
@@ -12,10 +11,11 @@ const helmet = require('helmet')
 
 const expressPlugin = require('../index')
 
-test('use a middleware', t => {
-  t.plan(7)
+test('use a middleware', async t => {
+  t.plan(5)
 
   const instance = fastify()
+  t.after(() => instance.close())
   instance.register(expressPlugin)
     .after(() => {
       const useRes = instance.use(function (_req, _res, next) {
@@ -30,27 +30,21 @@ test('use a middleware', t => {
     reply.send({ hello: 'world' })
   })
 
-  instance.listen({ port: 0 }, err => {
-    t.assert.ifError(err)
+  const address = await instance.listen({ port: 0 })
 
-    t.teardown(instance.server.close.bind(instance.server))
+  const result = await fetch(address)
 
-    sget({
-      method: 'GET',
-      url: 'http://localhost:' + instance.server.address().port
-    }, (err, response, body) => {
-      t.assert.ifError(err)
-      t.assert.deepStrictEqual(response.statusCode, 200)
-      t.assert.deepStrictEqual(response.headers['content-length'], '' + body.length)
-      t.assert.deepStrictEqual(JSON.parse(body), { hello: 'world' })
-    })
-  })
+  const responseText = await result.text()
+  t.assert.deepStrictEqual(result.status, 200)
+  t.assert.deepStrictEqual(result.headers.get('content-length'), '' + responseText.length)
+  t.assert.deepStrictEqual(JSON.parse(responseText), { hello: 'world' })
 })
 
-test('use cors', t => {
-  t.plan(3)
+test('use cors', async t => {
+  t.plan(1)
 
   const instance = fastify()
+  t.after(() => instance.close())
   instance.register(expressPlugin)
     .after(() => {
       instance.use(cors())
@@ -60,25 +54,17 @@ test('use cors', t => {
     reply.send({ hello: 'world' })
   })
 
-  instance.listen({ port: 0 }, err => {
-    t.assert.ifError(err)
+  const address = await instance.listen({ port: 0 })
 
-    t.teardown(instance.server.close.bind(instance.server))
-
-    sget({
-      method: 'GET',
-      url: 'http://localhost:' + instance.server.address().port
-    }, (err, response) => {
-      t.assert.ifError(err)
-      t.assert.deepStrictEqual(response.headers['access-control-allow-origin'], '*')
-    })
-  })
+  const result = await fetch(address)
+  t.assert.deepStrictEqual(result.headers.get('access-control-allow-origin'), '*')
 })
 
-test('use helmet', t => {
-  t.plan(3)
+test('use helmet', async t => {
+  t.plan(1)
 
   const instance = fastify()
+  t.after(() => instance.close())
   instance.register(expressPlugin)
     .after(() => {
       instance.use(helmet())
@@ -88,55 +74,40 @@ test('use helmet', t => {
     reply.send({ hello: 'world' })
   })
 
-  instance.listen({ port: 0 }, err => {
-    t.assert.ifError(err)
+  const address = await instance.listen({ port: 0 })
 
-    t.teardown(instance.server.close.bind(instance.server))
-
-    sget({
-      method: 'GET',
-      url: 'http://localhost:' + instance.server.address().port
-    }, (err, response) => {
-      t.assert.ifError(err)
-      t.assert.ok(response.headers['x-xss-protection'])
-    })
-  })
+  const result = await fetch(address)
+  t.assert.ok(result.headers.get('x-xss-protection'))
 })
 
-test('use helmet and cors', t => {
+test('use helmet and cors', async t => {
+  t.plan(2)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+  instance.register(expressPlugin)
+    .after(() => {
+      instance.use(cors())
+      instance.use(helmet())
+    })
+
+  instance.get('/', function (_request, reply) {
+    reply.send({ hello: 'world' })
+  })
+
+  const address = await instance.listen({ port: 0 })
+
+  const result = await fetch(address)
+
+  t.assert.ok(result.headers.get('x-xss-protection'))
+  t.assert.deepStrictEqual(result.headers.get('access-control-allow-origin'), '*')
+})
+
+test('middlewares with prefix', async t => {
   t.plan(4)
 
   const instance = fastify()
-  instance.register(expressPlugin)
-    .after(() => {
-      instance.use(cors())
-      instance.use(helmet())
-    })
-
-  instance.get('/', function (_request, reply) {
-    reply.send({ hello: 'world' })
-  })
-
-  instance.listen({ port: 0 }, err => {
-    t.assert.ifError(err)
-
-    t.teardown(instance.server.close.bind(instance.server))
-
-    sget({
-      method: 'GET',
-      url: 'http://localhost:' + instance.server.address().port
-    }, (err, response) => {
-      t.assert.ifError(err)
-      t.assert.ok(response.headers['x-xss-protection'])
-      t.assert.deepStrictEqual(response.headers['access-control-allow-origin'], '*')
-    })
-  })
-})
-
-test('middlewares with prefix', t => {
-  t.plan(5)
-
-  const instance = fastify()
+  t.after(() => instance.close())
   instance.register(expressPlugin)
     .after(() => {
       instance.use(function (req, _res, next) {
@@ -176,87 +147,64 @@ test('middlewares with prefix', t => {
   instance.get('/prefix/', handler)
   instance.get('/prefix/inner', handler)
 
-  instance.listen({ port: 0 }, err => {
-    t.assert.ifError(err)
-    t.teardown(instance.server.close.bind(instance.server))
+  const address = await instance.listen({ port: 0 })
 
-    t.test('/', t => {
-      t.plan(2)
-      sget({
-        method: 'GET',
-        url: 'http://localhost:' + instance.server.address().port + '/',
-        json: true
-      }, (err, _response, body) => {
-        t.assert.ifError(err)
-        t.assert.deepStrictEqual(body, {
-          global: true,
-          global2: true,
-          root: true
-        })
-      })
+  await t.test('/', async t => {
+    t.plan(1)
+
+    const result = await fetch(address + '/')
+    t.assert.deepStrictEqual(await result.json(), {
+      global: true,
+      global2: true,
+      root: true
     })
+  })
 
-    t.test('/prefix', t => {
-      t.plan(2)
-      sget({
-        method: 'GET',
-        url: 'http://localhost:' + instance.server.address().port + '/prefix',
-        json: true
-      }, (err, _response, body) => {
-        t.assert.ifError(err)
-        t.assert.deepStrictEqual(body, {
-          prefixed: true,
-          global: true,
-          global2: true,
-          root: true,
-          slashed: true
-        })
-      })
+  await t.test('/prefix', async t => {
+    t.plan(1)
+
+    const result = await fetch(address + '/prefix')
+    t.assert.deepStrictEqual(await result.json(), {
+      prefixed: true,
+      global: true,
+      global2: true,
+      root: true,
+      slashed: true
     })
+  })
 
-    t.test('/prefix/', t => {
-      t.plan(2)
-      sget({
-        method: 'GET',
-        url: 'http://localhost:' + instance.server.address().port + '/prefix/',
-        json: true
-      }, (err, _response, body) => {
-        t.assert.ifError(err)
-        t.assert.deepStrictEqual(body, {
-          prefixed: true,
-          slashed: true,
-          global: true,
-          global2: true,
-          root: true
-        })
-      })
+  await t.test('/prefix/', async t => {
+    t.plan(1)
+
+    const result = await fetch(address + '/prefix/')
+    t.assert.deepStrictEqual(await result.json(), {
+      prefixed: true,
+      slashed: true,
+      global: true,
+      global2: true,
+      root: true
     })
+  })
 
-    t.test('/prefix/inner', t => {
-      t.plan(2)
-      sget({
-        method: 'GET',
-        url: 'http://localhost:' + instance.server.address().port + '/prefix/inner',
-        json: true
-      }, (err, _response, body) => {
-        t.assert.ifError(err)
-        t.assert.deepStrictEqual(body, {
-          prefixed: true,
-          slashed: true,
-          global: true,
-          global2: true,
-          root: true
-        })
-      })
+  await t.test('/prefix/inner', async t => {
+    t.plan(1)
+
+    const result = await fetch(address + '/prefix/inner')
+    t.assert.deepStrictEqual(await result.json(), {
+      prefixed: true,
+      slashed: true,
+      global: true,
+      global2: true,
+      root: true
     })
   })
 })
 
-test('res.end should block middleware execution', t => {
-  t.plan(6)
+test('res.end should block middleware execution', async t => {
+  t.plan(4)
 
   const instance = fastify()
-  t.teardown(instance.close)
+  t.after(() => instance.close())
   instance.register(expressPlugin)
     .after(() => {
       instance.use(function (_req, res) {
@@ -264,7 +212,7 @@ test('res.end should block middleware execution', t => {
       })
 
       instance.use(function () {
-        t.fail('we should not be here')
+        t.assert.fail('we should not be here')
       })
     })
 
@@ -274,7 +222,7 @@ test('res.end should block middleware execution', t => {
   })
 
   instance.addHook('preHandler', () => {
-    t.fail('this should not be called')
+    t.assert.fail('this should not be called')
   })
 
   instance.addHook('onSend', (_req, _reply, payload, next) => {
@@ -288,26 +236,22 @@ test('res.end should block middleware execution', t => {
   })
 
   instance.get('/', function () {
-    t.fail('we should no be here')
+    t.assert.fail('we should no be here')
   })
 
-  instance.listen({ port: 0 }, (err, address) => {
-    t.assert.ifError(err)
-    sget({
-      method: 'GET',
-      url: address
-    }, (err, res, data) => {
-      t.assert.ifError(err)
-      t.assert.deepStrictEqual(res.statusCode, 200)
-      t.assert.deepStrictEqual(data.toString(), 'hello')
-    })
-  })
+  const address = await instance.listen({ port: 0 })
+
+  const result = await fetch(address)
+
+  t.assert.deepStrictEqual(result.status, 200)
+
+  t.assert.deepStrictEqual(await result.text(), 'hello')
 })
 
-test('Use a middleware inside a plugin after an encapsulated plugin', t => {
-  t.plan(5)
+test('Use a middleware inside a plugin after an encapsulated plugin', async t => {
+  t.plan(3)
   const f = fastify()
-  t.teardown(f.close)
+  t.after(() => f.close())
   f.register(expressPlugin)
 
   f.register(function (instance, _opts, next) {
@@ -332,23 +276,18 @@ test('Use a middleware inside a plugin after an encapsulated plugin', t => {
     next()
   }))
 
-  f.listen({ port: 0 }, (err, address) => {
-    t.assert.ifError(err)
-    sget({
-      method: 'GET',
-      url: address
-    }, (err, res, data) => {
-      t.assert.ifError(err)
-      t.assert.deepStrictEqual(res.statusCode, 200)
-      t.assert.deepStrictEqual(JSON.parse(data), { hello: 'world' })
-    })
-  })
+  const address = await f.listen({ port: 0 })
+
+  const result = await fetch(address)
+  t.assert.deepStrictEqual(result.status, 200)
+
+  t.assert.deepStrictEqual(await result.json(), { hello: 'world' })
 })
 
-test('middlewares should run in the order in which they are defined', t => {
-  t.plan(10)
+test('middlewares should run in the order in which they are defined', async t => {
+  t.plan(8)
   const f = fastify()
-  t.teardown(f.close)
+  t.after(() => f.close())
   f.register(expressPlugin)
 
   f.register(fp(function (instance, _opts, next) {
@@ -400,15 +339,9 @@ test('middlewares should run in the order in which they are defined', t => {
     next()
   })
 
-  f.listen({ port: 0 }, (err, address) => {
-    t.assert.ifError(err)
-    sget({
-      method: 'GET',
-      url: address
-    }, (err, res, data) => {
-      t.assert.ifError(err)
-      t.assert.deepStrictEqual(res.statusCode, 200)
-      t.assert.deepStrictEqual(JSON.parse(data), { hello: 'world' })
-    })
-  })
+  const address = await f.listen({ port: 0 })
+
+  const result = await fetch(address)
+  t.assert.deepStrictEqual(result.status, 200)
+  t.assert.deepStrictEqual(await result.json(), { hello: 'world' })
 })
