@@ -3,7 +3,6 @@
 // Original Fastify test/middlewares.test.js file
 
 const { test } = require('node:test')
-const sget = require('simple-get').concat
 const fastify = require('fastify')
 const fp = require('fastify-plugin')
 const cors = require('cors')

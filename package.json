@@ -9,7 +9,7 @@
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "test": "npm run test:unit && npm run test:typescript",
-    "test:unit": "tap",
+    "test:unit": "node --test",
     "test:typescript": "tsd"
   },
   "repository": {
@@ -71,8 +71,6 @@
     "passport": "^0.7.0",
     "passport-http-bearer": "^1.0.1",
     "serve-static": "^1.15.0",
-    "simple-get": "^4.0.1",
-    "tap": "^21.0.0",
     "tsd": "^0.31.0"
   },
   "dependencies": {

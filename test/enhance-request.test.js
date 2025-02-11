@@ -2,7 +2,6 @@
 
 const { test } = require('node:test')
 const Fastify = require('fastify')
-const sget = require('simple-get').concat
 
 const expressPlugin = require('../index')
 

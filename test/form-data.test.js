@@ -5,7 +5,6 @@ const Fastify = require('fastify')
 const fastifyFormBody = require('@fastify/formbody')
 const Express = require('express')
 const bodyParser = require('body-parser')
-const sget = require('simple-get').concat
 
 const expressPlugin = require('../index')
 
