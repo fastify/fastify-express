@@ -59,6 +59,7 @@ function fastifyExpress (fastify, options, next) {
       req.raw.body = req.body
     }
     // backward compatibility for cookie-parser
+    /* c8 ignore next 3 */
     if (req.cookies) {
       req.raw.cookies = req.cookies
     }
