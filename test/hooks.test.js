@@ -19,8 +19,8 @@ test('onSend hook should receive valid request and reply objects if middleware f
   fastify.decorateReply('testDecorator', 'testDecoratorVal')
 
   fastify.addHook('onSend', function (request, reply, _payload, next) {
-    t.equal(request.testDecorator, 'testDecoratorVal')
-    t.equal(reply.testDecorator, 'testDecoratorVal')
+    t.assert.deepStrictEqual(request.testDecorator, 'testDecoratorVal')
+    t.assert.deepStrictEqual(reply.testDecorator, 'testDecoratorVal')
     next()
   })
 
@@ -32,8 +32,8 @@ test('onSend hook should receive valid request and reply objects if middleware f
     method: 'GET',
     url: '/'
   }, (err, res) => {
-    t.error(err)
-    t.equal(res.statusCode, 500)
+    t.assert.ifError(err)
+    t.assert.deepStrictEqual(res.statusCode, 500)
   })
 })
 
@@ -43,12 +43,12 @@ test('request.url is not mutated between onRequest and onResponse', t => {
   const targetUrl = '/hubba/bubba'
 
   fastify.addHook('onRequest', (request, _, next) => {
-    t.equal(request.url, targetUrl)
+    t.assert.deepStrictEqual(request.url, targetUrl)
     next()
   })
 
   fastify.addHook('onResponse', (request, _, next) => {
-    t.equal(request.url, targetUrl)
+    t.assert.deepStrictEqual(request.url, targetUrl)
     next()
   })
 
@@ -66,7 +66,7 @@ test('request.url is not mutated between onRequest and onResponse', t => {
     method: 'GET',
     url: targetUrl
   }, (err, res) => {
-    t.error(err)
-    t.equal(res.statusCode, 200)
+    t.assert.ifError(err)
+    t.assert.deepStrictEqual(res.statusCode, 200)
   })
 })

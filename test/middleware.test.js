@@ -19,11 +19,11 @@ test('use a middleware', t => {
   instance.register(expressPlugin)
     .after(() => {
       const useRes = instance.use(function (_req, _res, next) {
-        t.pass('middleware called')
+        t.assert.ok('middleware called')
         next()
       })
 
-      t.equal(useRes, instance)
+      t.assert.deepStrictEqual(useRes, instance)
     })
 
   instance.get('/', function (_request, reply) {
@@ -31,7 +31,7 @@ test('use a middleware', t => {
   })
 
   instance.listen({ port: 0 }, err => {
-    t.error(err)
+    t.assert.ifError(err)
 
     t.teardown(instance.server.close.bind(instance.server))
 
@@ -39,10 +39,10 @@ test('use a middleware', t => {
       method: 'GET',
       url: 'http://localhost:' + instance.server.address().port
     }, (err, response, body) => {
-      t.error(err)
-      t.equal(response.statusCode, 200)
-      t.equal(response.headers['content-length'], '' + body.length)
-      t.same(JSON.parse(body), { hello: 'world' })
+      t.assert.ifError(err)
+      t.assert.deepStrictEqual(response.statusCode, 200)
+      t.assert.deepStrictEqual(response.headers['content-length'], '' + body.length)
+      t.assert.deepStrictEqual(JSON.parse(body), { hello: 'world' })
     })
   })
 })
@@ -61,7 +61,7 @@ test('use cors', t => {
   })
 
   instance.listen({ port: 0 }, err => {
-    t.error(err)
+    t.assert.ifError(err)
 
     t.teardown(instance.server.close.bind(instance.server))
 
@@ -69,8 +69,8 @@ test('use cors', t => {
       method: 'GET',
       url: 'http://localhost:' + instance.server.address().port
     }, (err, response) => {
-      t.error(err)
-      t.equal(response.headers['access-control-allow-origin'], '*')
+      t.assert.ifError(err)
+      t.assert.deepStrictEqual(response.headers['access-control-allow-origin'], '*')
     })
   })
 })
@@ -89,7 +89,7 @@ test('use helmet', t => {
   })
 
   instance.listen({ port: 0 }, err => {
-    t.error(err)
+    t.assert.ifError(err)
 
     t.teardown(instance.server.close.bind(instance.server))
 
@@ -97,8 +97,8 @@ test('use helmet', t => {
       method: 'GET',
       url: 'http://localhost:' + instance.server.address().port
     }, (err, response) => {
-      t.error(err)
-      t.ok(response.headers['x-xss-protection'])
+      t.assert.ifError(err)
+      t.assert.ok(response.headers['x-xss-protection'])
     })
   })
 })
@@ -118,7 +118,7 @@ test('use helmet and cors', t => {
   })
 
   instance.listen({ port: 0 }, err => {
-    t.error(err)
+    t.assert.ifError(err)
 
     t.teardown(instance.server.close.bind(instance.server))
 
@@ -126,9 +126,9 @@ test('use helmet and cors', t => {
       method: 'GET',
       url: 'http://localhost:' + instance.server.address().port
     }, (err, response) => {
-      t.error(err)
-      t.ok(response.headers['x-xss-protection'])
-      t.equal(response.headers['access-control-allow-origin'], '*')
+      t.assert.ifError(err)
+      t.assert.ok(response.headers['x-xss-protection'])
+      t.assert.deepStrictEqual(response.headers['access-control-allow-origin'], '*')
     })
   })
 })
@@ -177,7 +177,7 @@ test('middlewares with prefix', t => {
   instance.get('/prefix/inner', handler)
 
   instance.listen({ port: 0 }, err => {
-    t.error(err)
+    t.assert.ifError(err)
     t.teardown(instance.server.close.bind(instance.server))
 
     t.test('/', t => {
@@ -187,8 +187,8 @@ test('middlewares with prefix', t => {
         url: 'http://localhost:' + instance.server.address().port + '/',
         json: true
       }, (err, _response, body) => {
-        t.error(err)
-        t.same(body, {
+        t.assert.ifError(err)
+        t.assert.deepStrictEqual(body, {
           global: true,
           global2: true,
           root: true
@@ -203,8 +203,8 @@ test('middlewares with prefix', t => {
         url: 'http://localhost:' + instance.server.address().port + '/prefix',
         json: true
       }, (err, _response, body) => {
-        t.error(err)
-        t.same(body, {
+        t.assert.ifError(err)
+        t.assert.deepStrictEqual(body, {
           prefixed: true,
           global: true,
           global2: true,
@@ -221,8 +221,8 @@ test('middlewares with prefix', t => {
         url: 'http://localhost:' + instance.server.address().port + '/prefix/',
         json: true
       }, (err, _response, body) => {
-        t.error(err)
-        t.same(body, {
+        t.assert.ifError(err)
+        t.assert.deepStrictEqual(body, {
           prefixed: true,
           slashed: true,
           global: true,
@@ -239,8 +239,8 @@ test('middlewares with prefix', t => {
         url: 'http://localhost:' + instance.server.address().port + '/prefix/inner',
         json: true
       }, (err, _response, body) => {
-        t.error(err)
-        t.same(body, {
+        t.assert.ifError(err)
+        t.assert.deepStrictEqual(body, {
           prefixed: true,
           slashed: true,
           global: true,
@@ -269,7 +269,7 @@ test('res.end should block middleware execution', t => {
     })
 
   instance.addHook('onRequest', (_req, _res, next) => {
-    t.ok('called')
+    t.assert.ok('called')
     next()
   })
 
@@ -278,12 +278,12 @@ test('res.end should block middleware execution', t => {
   })
 
   instance.addHook('onSend', (_req, _reply, payload, next) => {
-    t.ok('called')
+    t.assert.ok('called')
     next(null, payload)
   })
 
   instance.addHook('onResponse', (_request, _reply, next) => {
-    t.ok('called')
+    t.assert.ok('called')
     next()
   })
 
@@ -292,14 +292,14 @@ test('res.end should block middleware execution', t => {
   })
 
   instance.listen({ port: 0 }, (err, address) => {
-    t.error(err)
+    t.assert.ifError(err)
     sget({
       method: 'GET',
       url: address
     }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 200)
-      t.equal(data.toString(), 'hello')
+      t.assert.ifError(err)
+      t.assert.deepStrictEqual(res.statusCode, 200)
+      t.assert.deepStrictEqual(data.toString(), 'hello')
     })
   })
 })
@@ -312,7 +312,7 @@ test('Use a middleware inside a plugin after an encapsulated plugin', t => {
 
   f.register(function (instance, _opts, next) {
     instance.use(function (_req, _res, next) {
-      t.ok('first middleware called')
+      t.assert.ok('first middleware called')
       next()
     })
 
@@ -325,7 +325,7 @@ test('Use a middleware inside a plugin after an encapsulated plugin', t => {
 
   f.register(fp(function (instance, _opts, next) {
     instance.use(function (_req, _res, next) {
-      t.ok('second middleware called')
+      t.assert.ok('second middleware called')
       next()
     })
 
@@ -333,14 +333,14 @@ test('Use a middleware inside a plugin after an encapsulated plugin', t => {
   }))
 
   f.listen({ port: 0 }, (err, address) => {
-    t.error(err)
+    t.assert.ifError(err)
     sget({
       method: 'GET',
       url: address
     }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 200)
-      t.same(JSON.parse(data), { hello: 'world' })
+      t.assert.ifError(err)
+      t.assert.deepStrictEqual(res.statusCode, 200)
+      t.assert.deepStrictEqual(JSON.parse(data), { hello: 'world' })
     })
   })
 })
@@ -353,14 +353,14 @@ test('middlewares should run in the order in which they are defined', t => {
 
   f.register(fp(function (instance, _opts, next) {
     instance.use(function (req, _res, next) {
-      t.equal(req.previous, undefined)
+      t.assert.deepStrictEqual(req.previous, undefined)
       req.previous = 1
       next()
     })
 
     instance.register(fp(function (i, _opts, next) {
       i.use(function (req, _res, next) {
-        t.equal(req.previous, 2)
+        t.assert.deepStrictEqual(req.previous, 2)
         req.previous = 3
         next()
       })
@@ -368,7 +368,7 @@ test('middlewares should run in the order in which they are defined', t => {
     }))
 
     instance.use(function (req, _res, next) {
-      t.equal(req.previous, 1)
+      t.assert.deepStrictEqual(req.previous, 1)
       req.previous = 2
       next()
     })
@@ -378,19 +378,19 @@ test('middlewares should run in the order in which they are defined', t => {
 
   f.register(function (instance, _opts, next) {
     instance.use(function (req, _res, next) {
-      t.equal(req.previous, 3)
+      t.assert.deepStrictEqual(req.previous, 3)
       req.previous = 4
       next()
     })
 
     instance.get('/', function (request, reply) {
-      t.equal(request.raw.previous, 5)
+      t.assert.deepStrictEqual(request.raw.previous, 5)
       reply.send({ hello: 'world' })
     })
 
     instance.register(fp(function (i, _opts, next) {
       i.use(function (req, _res, next) {
-        t.equal(req.previous, 4)
+        t.assert.deepStrictEqual(req.previous, 4)
         req.previous = 5
         next()
       })
@@ -401,14 +401,14 @@ test('middlewares should run in the order in which they are defined', t => {
   })
 
   f.listen({ port: 0 }, (err, address) => {
-    t.error(err)
+    t.assert.ifError(err)
     sget({
       method: 'GET',
       url: address
     }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 200)
-      t.same(JSON.parse(data), { hello: 'world' })
+      t.assert.ifError(err)
+      t.assert.deepStrictEqual(res.statusCode, 200)
+      t.assert.deepStrictEqual(JSON.parse(data), { hello: 'world' })
     })
   })
 })
