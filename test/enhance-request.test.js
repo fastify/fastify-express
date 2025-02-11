@@ -1,90 +1,81 @@
 'use strict'
 
-const { test } = require('tap')
+const { test } = require('node:test')
 const Fastify = require('fastify')
 const sget = require('simple-get').concat
 
 const expressPlugin = require('../index')
 
-test('Should enhance the Node.js core request/response objects', t => {
-  t.plan(10)
+test('Should enhance the Node.js core request/response objects', async t => {
+  t.plan(8)
   const fastify = Fastify()
-  t.teardown(fastify.close)
+  t.after(() => fastify.close())
 
   fastify.register(expressPlugin)
 
   fastify.get('/', async (req, reply) => {
-    t.equal(req.raw.originalUrl, req.raw.url)
-    t.equal(req.raw.id, req.id)
-    t.equal(req.raw.hostname, req.hostname)
-    t.equal(req.raw.protocol, req.protocol)
-    t.equal(req.raw.ip, req.ip)
-    t.same(req.raw.ips, req.ips)
-    t.ok(req.raw.log)
-    t.ok(reply.raw.log)
+    t.assert.deepStrictEqual(req.raw.originalUrl, req.raw.url)
+    t.assert.deepStrictEqual(req.raw.id, req.id)
+    t.assert.deepStrictEqual(req.raw.hostname, req.hostname)
+    t.assert.deepStrictEqual(req.raw.protocol, req.protocol)
+    t.assert.deepStrictEqual(req.raw.ip, req.ip)
+    t.assert.deepStrictEqual(req.raw.ips, req.ips)
+    t.assert.ok(req.raw.log)
+    t.assert.ok(reply.raw.log)
     return { hello: 'world' }
   })
 
-  fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
-    sget({
-      method: 'GET',
-      url: address
-    }, (err) => {
-      t.error(err)
-    })
-  })
+  const address = await fastify.listen({ port: 0 })
+
+  await fetch(address)
 })
 
-test('trust proxy protocol', (t) => {
-  t.plan(5)
+test('trust proxy protocol', async (t) => {
+  t.plan(3)
   const fastify = Fastify({ trustProxy: true })
 
-  t.teardown(fastify.close.bind(fastify))
+  t.after(() => fastify.close())
 
   fastify.register(expressPlugin).after(() => {
     fastify.use('/', function (req, res) {
-      t.equal(req.ip, '1.1.1.1', 'gets ip from x-forwarded-for')
-      t.equal(req.hostname, 'example.com', 'gets hostname from x-forwarded-host')
-      t.equal(req.protocol, 'lorem', 'gets protocol from x-forwarded-proto')
+      t.assert.deepStrictEqual(req.ip, '1.1.1.1', 'gets ip from x-forwarded-for')
+      t.assert.deepStrictEqual(req.hostname, 'example.com', 'gets hostname from x-forwarded-host')
+      t.assert.deepStrictEqual(req.protocol, 'lorem', 'gets protocol from x-forwarded-proto')
 
       res.sendStatus(200)
     })
   })
 
-  fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
-    sget({
-      method: 'GET',
-      headers: {
-        'X-Forwarded-For': '1.1.1.1',
-        'X-Forwarded-Host': 'example.com',
-        'X-Forwarded-Proto': 'lorem'
-      },
-      url: address
-    }, (err) => {
-      t.error(err)
-    })
+  const address = await fastify.listen({ port: 0 })
+
+  await fetch(address, {
+    headers: {
+      'X-Forwarded-For': '1.1.1.1',
+      'X-Forwarded-Host': 'example.com',
+      'X-Forwarded-Proto': 'lorem'
+    }
   })
 })
 
-test('passing createProxyHandler sets up a Proxy with Express req', t => {
-  t.plan(8)
+test('passing createProxyHandler sets up a Proxy with Express req', async t => {
+  t.plan(6)
   const testString = 'test proxy'
 
   const fastify = Fastify()
+  t.after(() => fastify.close())
+
   fastify.register(expressPlugin, {
     createProxyHandler: () => ({
       set (target, prop, value) {
         if (prop === 'customField') {
-          t.equal(value, testString)
+          t.assert.deepStrictEqual(value, testString)
         }
 
         return Reflect.set(target, prop, value)
       },
       get (target, prop) {
         if (prop === 'customField') {
-          t.pass('get customField called')
+          t.assert.ok('get customField called')
         }
 
         return target[prop]
@@ -94,7 +85,7 @@ test('passing createProxyHandler sets up a Proxy with Express req', t => {
     .after(() => {
       fastify.use(function (req, _res, next) {
         req.customField = testString
-        t.equal(req.customField, testString)
+        t.assert.deepStrictEqual(req.customField, testString)
         next()
       })
     })
@@ -103,28 +94,22 @@ test('passing createProxyHandler sets up a Proxy with Express req', t => {
     reply.send({ hello: 'world' })
   })
 
-  fastify.listen({ port: 0 }, err => {
-    t.error(err)
+  const address = await fastify.listen({ port: 0 })
 
-    t.teardown(fastify.server.close.bind(fastify.server))
+  const response = await fetch(address)
 
-    sget({
-      method: 'GET',
-      url: 'http://localhost:' + fastify.server.address().port
-    }, (err, response, body) => {
-      t.error(err)
-      t.equal(response.statusCode, 200)
-      t.equal(response.headers['content-length'], '' + body.length)
-      t.same(JSON.parse(body), { hello: 'world' })
-    })
-  })
+  const responseText = await response.text()
+  t.assert.deepStrictEqual(response.status, 200)
+  t.assert.deepStrictEqual(response.headers.get('content-length'), '' + responseText.length)
+  t.assert.deepStrictEqual(JSON.parse(responseText), { hello: 'world' })
 })
 
-test('createProxyHandler has access to Fastify request object', t => {
-  t.plan(12)
+test('createProxyHandler has access to Fastify request object', async t => {
+  t.plan(10)
   const startTestString = 'original'
 
   const fastify = Fastify()
+  t.after(() => fastify.close())
   fastify.decorateRequest('getAndSetFastify', startTestString)
   fastify.decorateRequest('getOnlyFastify', startTestString)
 
@@ -132,7 +117,7 @@ test('createProxyHandler has access to Fastify request object', t => {
     createProxyHandler: fastifyReq => ({
       set (target, prop, value) {
         if (prop === 'getAndSetFastify') {
-          t.pass('set to Fastify called')
+          t.assert.ok('set to Fastify called')
           return Reflect.set(fastifyReq, prop, value)
         } else if (prop === 'getOnlyFastify') {
           return true
@@ -143,7 +128,7 @@ test('createProxyHandler has access to Fastify request object', t => {
       get (target, prop) {
         if (prop === 'getAndSetFastify' || prop === 'getOnlyFastify') {
           // Return something from Fastify req
-          t.pass('get from Fastify called')
+          t.assert.ok('get from Fastify called')
           return fastifyReq[prop]
         }
 
@@ -153,8 +138,8 @@ test('createProxyHandler has access to Fastify request object', t => {
   })
     .after(() => {
       fastify.use(function (req, _res, next) {
-        t.equal(req.getAndSetFastify, startTestString)
-        t.equal(req.getOnlyFastify, startTestString)
+        t.assert.deepStrictEqual(req.getAndSetFastify, startTestString)
+        t.assert.deepStrictEqual(req.getOnlyFastify, startTestString)
         req.getAndSetFastify = 'updated'
         req.getOnlyFastify = 'updated'
         next()
@@ -163,25 +148,18 @@ test('createProxyHandler has access to Fastify request object', t => {
 
   fastify.get('/', function (request, reply) {
     // getOnlyFastify should change and getOnlyFastify should not
-    t.equal(request.getAndSetFastify, 'updated')
-    t.equal(request.getOnlyFastify, startTestString)
+    t.assert.deepStrictEqual(request.getAndSetFastify, 'updated')
+    t.assert.deepStrictEqual(request.getOnlyFastify, startTestString)
 
     reply.send({ hello: 'world' })
   })
 
-  fastify.listen({ port: 0 }, err => {
-    t.error(err)
+  const address = await fastify.listen({ port: 0 })
 
-    t.teardown(fastify.server.close.bind(fastify.server))
+  const response = await fetch(address)
 
-    sget({
-      method: 'GET',
-      url: 'http://localhost:' + fastify.server.address().port
-    }, (err, response, body) => {
-      t.error(err)
-      t.equal(response.statusCode, 200)
-      t.equal(response.headers['content-length'], '' + body.length)
-      t.same(JSON.parse(body), { hello: 'world' })
-    })
-  })
+  const responseText = await response.text()
+  t.assert.deepStrictEqual(response.status, 200)
+  t.assert.deepStrictEqual(response.headers.get('content-length'), '' + responseText.length)
+  t.assert.deepStrictEqual(JSON.parse(responseText), { hello: 'world' })
 })
