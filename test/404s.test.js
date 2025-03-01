@@ -1,13 +1,12 @@
 'use strict'
 
-const { test } = require('tap')
+const { test } = require('node:test')
 const fp = require('fastify-plugin')
 const Fastify = require('fastify')
-const sget = require('simple-get').concat
 const expressPlugin = require('../index')
 
-test('run hooks and middleware on default 404', t => {
-  t.plan(8)
+test('run hooks and middleware on default 404', async t => {
+  t.plan(6)
 
   const fastify = Fastify()
 
@@ -15,28 +14,28 @@ test('run hooks and middleware on default 404', t => {
     .register(expressPlugin)
     .after(() => {
       fastify.use(function (_req, _res, next) {
-        t.pass('middleware called')
+        t.assert.ok('middleware called')
         next()
       })
     })
 
   fastify.addHook('onRequest', function (_req, _res, next) {
-    t.pass('onRequest called')
+    t.assert.ok('onRequest called')
     next()
   })
 
   fastify.addHook('preHandler', function (_request, _reply, next) {
-    t.pass('preHandler called')
+    t.assert.ok('preHandler called')
     next()
   })
 
   fastify.addHook('onSend', function (_request, _reply, _payload, next) {
-    t.pass('onSend called')
+    t.assert.ok('onSend called')
     next()
   })
 
   fastify.addHook('onResponse', function (_request, _reply, next) {
-    t.pass('onResponse called')
+    t.assert.ok('onResponse called')
     next()
   })
 
@@ -44,53 +43,48 @@ test('run hooks and middleware on default 404', t => {
     reply.send({ hello: 'world' })
   })
 
-  t.teardown(fastify.close.bind(fastify))
+  t.after(() => fastify.close())
 
-  fastify.listen({ port: 0 }, err => {
-    t.error(err)
+  const address = await fastify.listen({ port: 0 })
 
-    sget({
-      method: 'PUT',
-      url: 'http://localhost:' + fastify.server.address().port,
-      body: JSON.stringify({ hello: 'world' }),
-      headers: { 'Content-Type': 'application/json' }
-    }, (err, response) => {
-      t.error(err)
-      t.equal(response.statusCode, 404)
-    })
+  const result = await fetch(address, {
+    method: 'PUT',
+    body: JSON.stringify({ hello: 'world' }),
   })
+
+  t.assert.deepStrictEqual(result.status, 404)
 })
 
-test('run non-encapsulated plugin hooks and middleware on default 404', t => {
-  t.plan(8)
+test('run non-encapsulated plugin hooks and middleware on default 404', async t => {
+  t.plan(6)
 
   const fastify = Fastify()
-  t.teardown(fastify.close)
+  t.after(() => fastify.close())
   fastify.register(expressPlugin)
 
   fastify.register(fp(function (instance, _options, next) {
     instance.addHook('onRequest', function (_req, _res, next) {
-      t.pass('onRequest called')
+      t.assert.ok('onRequest called')
       next()
     })
 
     instance.use(function (_req, _res, next) {
-      t.pass('middleware called')
+      t.assert.ok('middleware called')
       next()
     })
 
     instance.addHook('preHandler', function (_request, _reply, next) {
-      t.pass('preHandler called')
+      t.assert.ok('preHandler called')
       next()
     })
 
     instance.addHook('onSend', function (_request, _reply, _payload, next) {
-      t.pass('onSend called')
+      t.assert.ok('onSend called')
       next()
     })
 
     instance.addHook('onResponse', function (_request, _reply, next) {
-      t.pass('onResponse called')
+      t.assert.ok('onResponse called')
       next()
     })
 
@@ -101,50 +95,45 @@ test('run non-encapsulated plugin hooks and middleware on default 404', t => {
     reply.send({ hello: 'world' })
   })
 
-  fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
-    sget({
-      method: 'POST',
-      url: address,
-      body: JSON.stringify({ hello: 'world' }),
-      headers: { 'Content-Type': 'application/json' }
-    }, (err, response) => {
-      t.error(err)
-      t.equal(response.statusCode, 404)
-    })
+  const address = await fastify.listen({ port: 0 })
+
+  const result = await fetch(address, {
+    method: 'POST',
+    body: JSON.stringify({ hello: 'world' }),
   })
+  t.assert.deepStrictEqual(result.status, 404)
 })
 
-test('run non-encapsulated plugin hooks and middleware on custom 404', t => {
-  t.plan(14)
+test('run non-encapsulated plugin hooks and middleware on custom 404', async t => {
+  t.plan(12)
 
   const fastify = Fastify()
-  t.teardown(fastify.close)
+  t.after(() => fastify.close())
   fastify.register(expressPlugin)
 
   const plugin = fp((instance, _opts, next) => {
     instance.addHook('onRequest', function (_req, _res, next) {
-      t.pass('onRequest called')
+      t.assert.ok('onRequest called')
       next()
     })
 
     instance.use(function (_req, _res, next) {
-      t.pass('middleware called')
+      t.assert.ok('middleware called')
       next()
     })
 
     instance.addHook('preHandler', function (_request, _reply, next) {
-      t.pass('preHandler called')
+      t.assert.ok('preHandler called')
       next()
     })
 
     instance.addHook('onSend', function (_request, _reply, _payload, next) {
-      t.pass('onSend called')
+      t.assert.ok('onSend called')
       next()
     })
 
     instance.addHook('onResponse', function (_request, _reply, next) {
-      t.pass('onResponse called')
+      t.assert.ok('onResponse called')
       next()
     })
 
@@ -163,21 +152,16 @@ test('run non-encapsulated plugin hooks and middleware on custom 404', t => {
 
   fastify.register(plugin) // Registering plugin after handler also works
 
-  fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
-    sget({
-      method: 'GET',
-      url: address + '/not-found'
-    }, (err, response, body) => {
-      t.error(err)
-      t.equal(body.toString(), 'this was not found')
-      t.equal(response.statusCode, 404)
-    })
-  })
+  const address = await fastify.listen({ port: 0 })
+
+  const result = await fetch(address + '/not-found')
+
+  t.assert.deepStrictEqual(await result.text(), 'this was not found')
+  t.assert.deepStrictEqual(result.status, 404)
 })
 
-test('run hooks and middleware with encapsulated 404', t => {
-  t.plan(13)
+test('run hooks and middleware with encapsulated 404', async t => {
+  t.plan(11)
 
   const fastify = Fastify()
 
@@ -185,28 +169,28 @@ test('run hooks and middleware with encapsulated 404', t => {
     .register(expressPlugin)
     .after(() => {
       fastify.use(function (_req, _res, next) {
-        t.pass('middleware called')
+        t.assert.ok('middleware called')
         next()
       })
     })
 
   fastify.addHook('onRequest', function (_req, _res, next) {
-    t.pass('onRequest called')
+    t.assert.ok('onRequest called')
     next()
   })
 
   fastify.addHook('preHandler', function (_request, _reply, next) {
-    t.pass('preHandler called')
+    t.assert.ok('preHandler called')
     next()
   })
 
   fastify.addHook('onSend', function (_request, _reply, _payload, next) {
-    t.pass('onSend called')
+    t.assert.ok('onSend called')
     next()
   })
 
   fastify.addHook('onResponse', function (_request, _reply, next) {
-    t.pass('onResponse called')
+    t.assert.ok('onResponse called')
     next()
   })
 
@@ -216,59 +200,54 @@ test('run hooks and middleware with encapsulated 404', t => {
     })
 
     f.addHook('onRequest', function (_req, _res, next) {
-      t.pass('onRequest 2 called')
+      t.assert.ok('onRequest 2 called')
       next()
     })
 
     f.use(function (_req, _res, next) {
-      t.pass('middleware 2 called')
+      t.assert.ok('middleware 2 called')
       next()
     })
 
     f.addHook('preHandler', function (_request, _reply, next) {
-      t.pass('preHandler 2 called')
+      t.assert.ok('preHandler 2 called')
       next()
     })
 
     f.addHook('onSend', function (_request, _reply, _payload, next) {
-      t.pass('onSend 2 called')
+      t.assert.ok('onSend 2 called')
       next()
     })
 
     f.addHook('onResponse', function (_request, _reply, next) {
-      t.pass('onResponse 2 called')
+      t.assert.ok('onResponse 2 called')
       next()
     })
 
     next()
   }, { prefix: '/test' })
 
-  t.teardown(fastify.close.bind(fastify))
+  t.after(() => fastify.close())
 
-  fastify.listen({ port: 0 }, err => {
-    t.error(err)
+  const address = await fastify.listen({ port: 0 })
 
-    sget({
-      method: 'PUT',
-      url: 'http://localhost:' + fastify.server.address().port + '/test',
-      body: JSON.stringify({ hello: 'world' }),
-      headers: { 'Content-Type': 'application/json' }
-    }, (err, response) => {
-      t.error(err)
-      t.equal(response.statusCode, 404)
-    })
+  const result = await fetch(address + '/test', {
+    method: 'PUT',
+    body: JSON.stringify({ hello: 'world' }),
   })
+
+  t.assert.deepStrictEqual(result.status, 404)
 })
 
-test('run middlewares on default 404', t => {
-  t.plan(4)
+test('run middlewares on default 404', async t => {
+  t.plan(2)
 
   const fastify = Fastify()
   fastify
     .register(expressPlugin)
     .after(() => {
       fastify.use(function (_req, _res, next) {
-        t.pass('middleware called')
+        t.assert.ok('middleware called')
         next()
       })
     })
@@ -277,32 +256,27 @@ test('run middlewares on default 404', t => {
     reply.send({ hello: 'world' })
   })
 
-  t.teardown(fastify.close.bind(fastify))
+  t.after(() => fastify.close())
 
-  fastify.listen({ port: 0 }, err => {
-    t.error(err)
+  const address = await fastify.listen({ port: 0 })
 
-    sget({
-      method: 'PUT',
-      url: 'http://localhost:' + fastify.server.address().port,
-      body: JSON.stringify({ hello: 'world' }),
-      headers: { 'Content-Type': 'application/json' }
-    }, (err, response) => {
-      t.error(err)
-      t.equal(response.statusCode, 404)
-    })
+  const result = await fetch(address, {
+    method: 'PUT',
+    body: JSON.stringify({ hello: 'world' }),
   })
+
+  t.assert.deepStrictEqual(result.status, 404)
 })
 
-test('run middlewares with encapsulated 404', t => {
-  t.plan(5)
+test('run middlewares with encapsulated 404', async t => {
+  t.plan(3)
 
   const fastify = Fastify()
   fastify
     .register(expressPlugin)
     .after(() => {
       fastify.use(function (_req, _res, next) {
-        t.pass('middleware called')
+        t.assert.ok('middleware called')
         next()
       })
     })
@@ -313,26 +287,21 @@ test('run middlewares with encapsulated 404', t => {
     })
 
     f.use(function (_req, _res, next) {
-      t.pass('middleware 2 called')
+      t.assert.ok('middleware 2 called')
       next()
     })
 
     next()
   }, { prefix: '/test' })
 
-  t.teardown(fastify.close.bind(fastify))
+  t.after(() => fastify.close())
 
-  fastify.listen({ port: 0 }, err => {
-    t.error(err)
+  const address = await fastify.listen({ port: 0 })
 
-    sget({
-      method: 'PUT',
-      url: 'http://localhost:' + fastify.server.address().port + '/test',
-      body: JSON.stringify({ hello: 'world' }),
-      headers: { 'Content-Type': 'application/json' }
-    }, (err, response) => {
-      t.error(err)
-      t.equal(response.statusCode, 404)
-    })
+  const result = await fetch(address + '/test', {
+    method: 'PUT',
+    body: JSON.stringify({ hello: 'world' }),
   })
+
+  t.assert.deepStrictEqual(result.status, 404)
 })

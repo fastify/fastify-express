@@ -1,19 +1,18 @@
 'use strict'
 
-const { test } = require('tap')
+const { test } = require('node:test')
 const Fastify = require('fastify')
 const fastifyFormBody = require('@fastify/formbody')
 const Express = require('express')
 const bodyParser = require('body-parser')
-const sget = require('simple-get').concat
 
 const expressPlugin = require('../index')
 
-test('POST request without form body works', t => {
-  t.plan(5)
+test('POST request without form body works', async t => {
+  t.plan(3)
   const fastify = Fastify()
   const express = Express()
-  t.teardown(fastify.close)
+  t.after(() => fastify.close())
 
   fastify.register(fastifyFormBody)
   fastify.register(expressPlugin)
@@ -22,7 +21,7 @@ test('POST request without form body works', t => {
       fastify.use(express)
       fastify.use((req, _res, next) => {
         // body-parser default value
-        t.same(req.body, {})
+        t.assert.deepStrictEqual(req.body, {})
         next()
       })
     })
@@ -31,25 +30,22 @@ test('POST request without form body works', t => {
     return { hello: 'world' }
   })
 
-  fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
-    sget({
-      method: 'post',
-      url: address + '/hello',
-      timeout: 100
-    }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 200)
-      t.same(JSON.parse(data), { hello: 'world' })
-    })
+  const address = await fastify.listen({ port: 0 })
+
+  const result = await fetch(address + '/hello', {
+    method: 'post',
+    signal: AbortSignal.timeout(100)
   })
+
+  t.assert.deepStrictEqual(result.status, 200)
+  t.assert.deepStrictEqual(await result.json(), { hello: 'world' })
 })
 
-test('POST request with form body and without body-parser works', t => {
-  t.plan(5)
+test('POST request with form body and without body-parser works', async t => {
+  t.plan(3)
   const fastify = Fastify()
   const express = Express()
-  t.teardown(fastify.close)
+  t.after(() => fastify.close())
 
   fastify.register(fastifyFormBody)
   fastify.register(expressPlugin)
@@ -57,7 +53,7 @@ test('POST request with form body and without body-parser works', t => {
       fastify.use(express)
       fastify.use((req, _res, next) => {
         // req.body default value
-        t.equal(req.body, undefined)
+        t.assert.deepStrictEqual(req.body, undefined)
         next()
       })
     })
@@ -66,26 +62,23 @@ test('POST request with form body and without body-parser works', t => {
     return { hello: 'world' }
   })
 
-  fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
-    sget({
-      method: 'post',
-      url: address + '/hello',
-      form: { input: 'test' },
-      timeout: 100
-    }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 200)
-      t.same(JSON.parse(data), { hello: 'world' })
-    })
+  const address = await fastify.listen({ port: 0 })
+
+  const result = await fetch(address + '/hello', {
+    method: 'post',
+    body: new URLSearchParams({ input: 'test' }),
+    signal: AbortSignal.timeout(100)
   })
+
+  t.assert.deepStrictEqual(result.status, 200)
+  t.assert.deepStrictEqual(await result.json(), { hello: 'world' })
 })
 
-test('POST request with form body and body-parser hangs up', t => {
-  t.plan(3)
+test('POST request with form body and body-parser hangs up', async t => {
+  t.plan(2)
   const fastify = Fastify()
   const express = Express()
-  t.teardown(fastify.close)
+  t.after(() => fastify.close())
 
   fastify.register(fastifyFormBody)
   fastify.register(expressPlugin)
@@ -94,7 +87,7 @@ test('POST request with form body and body-parser hangs up', t => {
       fastify.use(express)
       fastify.use((req, _res, next) => {
         // body-parser result
-        t.same(req.body, { input: 'test' })
+        t.assert.deepStrictEqual(req.body, { input: 'test' })
         next()
       })
     })
@@ -103,24 +96,20 @@ test('POST request with form body and body-parser hangs up', t => {
     return { hello: 'world' }
   })
 
-  fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
-    sget({
-      method: 'post',
-      url: address + '/hello',
-      form: { input: 'test' },
-      timeout: 100
-    }, (err) => {
-      t.equal(err.message, 'Request timed out')
-    })
-  })
+  const address = await fastify.listen({ port: 0 })
+
+  await t.assert.rejects(() => fetch(address + '/hello', {
+    method: 'post',
+    body: new URLSearchParams({ input: 'test' }),
+    signal: AbortSignal.timeout(5)
+  }), 'Request timed out')
 })
 
-test('POST request with form body and body-parser hangs up, compatibility case', t => {
-  t.plan(5)
+test('POST request with form body and body-parser hangs up, compatibility case', async t => {
+  t.plan(3)
   const fastify = Fastify()
   const express = Express()
-  t.teardown(fastify.close)
+  t.after(() => fastify.close())
 
   fastify.register(fastifyFormBody)
   fastify.register(expressPlugin, { expressHook: 'preHandler' })
@@ -128,7 +117,7 @@ test('POST request with form body and body-parser hangs up, compatibility case',
       fastify.use(express)
       fastify.use((req, _res, next) => {
         // fastify-formbody with backward compatibility result
-        t.same(req.body, { input: 'test' })
+        t.assert.deepStrictEqual(req.body.input, 'test')
         next()
       })
     })
@@ -137,17 +126,14 @@ test('POST request with form body and body-parser hangs up, compatibility case',
     return { hello: 'world' }
   })
 
-  fastify.listen({ port: 0 }, (err, address) => {
-    t.error(err)
-    sget({
-      method: 'post',
-      url: address + '/hello',
-      form: { input: 'test' },
-      timeout: 100
-    }, (err, res, data) => {
-      t.error(err)
-      t.equal(res.statusCode, 200)
-      t.same(JSON.parse(data), { hello: 'world' })
-    })
+  const address = await fastify.listen({ port: 0 })
+
+  const result = await fetch(address + '/hello', {
+    method: 'post',
+    body: new URLSearchParams({ input: 'test' }),
+    signal: AbortSignal.timeout(100)
   })
+
+  t.assert.deepStrictEqual(result.status, 200)
+  t.assert.deepStrictEqual(await result.json(), { hello: 'world' })
 })

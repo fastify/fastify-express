@@ -1,12 +1,12 @@
 'use strict'
 
-const { test } = require('tap')
+const { test } = require('node:test')
 const Fastify = require('fastify')
 const express = require('express')
 const expressPlugin = require('../index')
 
-test('onSend hook should receive valid request and reply objects if middleware fails', t => {
-  t.plan(4)
+test('onSend hook should receive valid request and reply objects if middleware fails', async t => {
+  t.plan(3)
   const fastify = Fastify()
   fastify.register(expressPlugin)
     .after(() => {
@@ -19,8 +19,8 @@ test('onSend hook should receive valid request and reply objects if middleware f
   fastify.decorateReply('testDecorator', 'testDecoratorVal')
 
   fastify.addHook('onSend', function (request, reply, _payload, next) {
-    t.equal(request.testDecorator, 'testDecoratorVal')
-    t.equal(reply.testDecorator, 'testDecoratorVal')
+    t.assert.deepStrictEqual(request.testDecorator, 'testDecoratorVal')
+    t.assert.deepStrictEqual(reply.testDecorator, 'testDecoratorVal')
     next()
   })
 
@@ -28,27 +28,26 @@ test('onSend hook should receive valid request and reply objects if middleware f
     reply.send('hello')
   })
 
-  fastify.inject({
+  const result = await fastify.inject({
     method: 'GET',
     url: '/'
-  }, (err, res) => {
-    t.error(err)
-    t.equal(res.statusCode, 500)
   })
+
+  t.assert.deepStrictEqual(result.statusCode, 500)
 })
 
-test('request.url is not mutated between onRequest and onResponse', t => {
-  t.plan(4)
+test('request.url is not mutated between onRequest and onResponse', async t => {
+  t.plan(3)
   const fastify = Fastify()
   const targetUrl = '/hubba/bubba'
 
   fastify.addHook('onRequest', (request, _, next) => {
-    t.equal(request.url, targetUrl)
+    t.assert.deepStrictEqual(request.url, targetUrl)
     next()
   })
 
   fastify.addHook('onResponse', (request, _, next) => {
-    t.equal(request.url, targetUrl)
+    t.assert.deepStrictEqual(request.url, targetUrl)
     next()
   })
 
@@ -62,11 +61,10 @@ test('request.url is not mutated between onRequest and onResponse', t => {
     fastify.use(mainRouter)
   })
 
-  fastify.inject({
+  const result = await fastify.inject({
     method: 'GET',
     url: targetUrl
-  }, (err, res) => {
-    t.error(err)
-    t.equal(res.statusCode, 200)
   })
+
+  t.assert.deepStrictEqual(result.statusCode, 200)
 })
