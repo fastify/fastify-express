@@ -26,8 +26,8 @@ npm i @fastify/express
 ### Compatibility
 | Plugin version | Fastify version |
 | ---------------|-----------------|
-| `^4.x`         | `^5.x`          |
-| `^2.x`         | `^4.x`          |
+| `>=4.x`        | `^5.x`          |
+| `>=2.x <4.x`   | `^4.x`          |
 | `^1.x`         | `^3.x`          |
 | `^0.x`         | `^2.x`          |
 
