@@ -75,7 +75,7 @@
     "tsd": "^0.31.0"
   },
   "dependencies": {
-    "express": "^4.18.3",
+    "express": "^5.1.0",
     "fastify-plugin": "^5.0.0"
   },
   "tsd": {
