@@ -365,3 +365,50 @@ test('middlewares should run in the order in which they are defined', async t =>
   t.assert.deepStrictEqual(result.status, 200)
   t.assert.deepStrictEqual(await result.json(), { hello: 'world' })
 })
+
+test('middlewares for encoded paths', async t => {
+  t.plan(2)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+  instance.register(expressPlugin)
+    .after(() => {
+      instance.use('/encoded', function (req, _res, next) {
+        req.slashed = true
+        next()
+      })
+      instance.use('/%65ncoded', function (req, _res, next) {
+        req.slashedSpecial = true
+        next()
+      })
+    })
+
+  function handler (request, reply) {
+    reply.send({
+      slashed: request.raw.slashed,
+      slashedSpecial: request.raw.slashedSpecial
+    })
+  }
+
+  instance.get('/encoded', handler)
+  instance.get('/%65ncoded', handler)
+
+  const address = await instance.listen({ port: 0 })
+
+  await t.test('decode the request url and run the middleware', async (t) => {
+    t.plan(2)
+    const response = await fetch(address + '/%65ncod%65d') // '/encoded'
+    t.assert.ok(response.ok)
+    const body = await response.json()
+    t.assert.deepStrictEqual(body, { slashed: true })
+  })
+
+  await t.test('does not double decode the url', async (t) => {
+    t.plan(2)
+    const response = await fetch(address + '/%2565ncoded')
+    const body = await response.json()
+
+    t.assert.ok(response.ok)
+    t.assert.deepStrictEqual(body, { slashedSpecial: true })
+  })
+})

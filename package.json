@@ -76,7 +76,8 @@
   },
   "dependencies": {
     "express": "^5.1.0",
-    "fastify-plugin": "^5.0.0"
+    "fastify-plugin": "^5.0.0",
+    "find-my-way": "^9.4.0"
   },
   "tsd": {
     "directory": "test/types"
