@@ -6,6 +6,7 @@ const { test } = require('node:test')
 const fastify = require('fastify')
 const fp = require('fastify-plugin')
 const cors = require('cors')
+const express = require('express')
 const helmet = require('helmet')
 
 const expressPlugin = require('../index')
@@ -365,3 +366,94 @@ test('middlewares should run in the order in which they are defined', async t =>
   t.assert.deepStrictEqual(result.status, 200)
   t.assert.deepStrictEqual(await result.json(), { hello: 'world' })
 })
+
+test('middlewares for encoded paths', async t => {
+  await t.test('decode the request url and run the middleware', async (t) => {
+    await checkEncodedPath('/encoded', '/%65ncoded', t)
+  })
+
+  await t.test('does not double decode the url', async (t) => {
+    await checkEncodedPath('/%65ncoded', '/%2565ncoded', t)
+  })
+
+  await t.test('handle the decoding for express handlers', async (t) => {
+    t.plan(6)
+
+    const routeUrl = '/express'
+    const requestUrl = '/%65xpress'
+
+    const instance = fastify()
+    t.after(() => instance.close())
+
+    instance.addHook('onSend', async function hook (request, reply, payload) {
+      t.assert.deepStrictEqual(request.raw.url, routeUrl)
+      t.assert.deepStrictEqual(request.raw.originalUrl, requestUrl)
+      return payload
+    })
+
+    instance.addHook('onResponse', async function hook (request, reply) {
+      t.assert.deepStrictEqual(request.raw.url, routeUrl)
+      t.assert.deepStrictEqual(request.raw.originalUrl, requestUrl)
+    })
+
+    await instance.register(expressPlugin)
+
+    // Register the express-like middleware
+    instance.use(routeUrl, function (req, _res, next) {
+      req.slashedByExpress = true
+      next()
+    })
+
+    // Register an express Router with an express handler
+    const innerRouter = express.Router()
+    innerRouter.get(routeUrl, function (req, res) {
+      res.send({ slashedByExpress: req.slashedByExpress })
+    })
+    instance.use(innerRouter)
+
+    const address = await instance.listen({ port: 0 })
+
+    const response = await fetch(address + requestUrl)
+    const body = await response.json()
+    t.assert.ok(response.ok)
+    t.assert.deepStrictEqual(body, { slashedByExpress: true })
+  })
+})
+
+async function checkEncodedPath (routeUrl, requestUrl, t) {
+  t.plan(6)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  instance.addHook('onSend', async function hook (request, reply, payload) {
+    t.assert.deepStrictEqual(request.raw.url, routeUrl)
+    t.assert.deepStrictEqual(request.raw.originalUrl, requestUrl)
+    return payload
+  })
+
+  instance.addHook('onResponse', async function hook (request, reply) {
+    t.assert.deepStrictEqual(request.raw.url, routeUrl)
+    t.assert.deepStrictEqual(request.raw.originalUrl, requestUrl)
+  })
+
+  await instance.register(expressPlugin)
+
+  // Register the express-like middleware
+  instance.use(routeUrl, function (req, _res, next) {
+    req.slashed = true
+    next()
+  })
+
+  // ... with a Fastify route handler
+  instance.get(routeUrl, (request, reply) => {
+    reply.send({ slashed: request.raw.slashed, })
+  })
+
+  const address = await instance.listen({ port: 0 })
+
+  const response = await fetch(address + requestUrl)
+  const body = await response.json()
+  t.assert.ok(response.ok)
+  t.assert.deepStrictEqual(body, { slashed: true })
+}
