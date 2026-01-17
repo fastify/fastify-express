@@ -1,6 +1,6 @@
 {
   "name": "@fastify/express",
-  "version": "4.0.3",
+  "version": "4.0.4",
   "description": "Express compatibility layer for Fastify",
   "main": "index.js",
   "type": "commonjs",
