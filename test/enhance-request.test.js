@@ -56,6 +56,26 @@ test('trust proxy protocol', async (t) => {
   })
 })
 
+test('query params still in in the request url after decodeURI', async (t) => {
+  t.plan(2)
+  const fastify = Fastify()
+
+  t.after(() => fastify.close())
+
+  fastify.register(expressPlugin).after(() => {
+    fastify.use('/admin', function (req, res) {
+      t.assert.deepStrictEqual(req.originalUrl, '/%61dmin?test=%76alue&test2=%76alue', 'originalUrl is not decoded')
+      t.assert.deepStrictEqual(req.url, '/admin?test=value&test2=value', 'url is decoded')
+
+      res.sendStatus(200)
+    })
+  })
+
+  const address = await fastify.listen({ port: 0 })
+
+  await fetch(`${address}/%61dmin?test=%76alue&test2=%76alue`)
+})
+
 test('passing createProxyHandler sets up a Proxy with Express req', async t => {
   t.plan(6)
   const testString = 'test proxy'

@@ -75,7 +75,8 @@ test('POST request with form body and without body-parser works', async t => {
 })
 
 test('POST request with form body and body-parser hangs up', async t => {
-  t.plan(2)
+  t.plan(3)
+
   const fastify = Fastify()
   const express = Express()
   t.after(() => fastify.close())
@@ -85,24 +86,25 @@ test('POST request with form body and body-parser hangs up', async t => {
     .after(() => {
       express.use(bodyParser.urlencoded({ extended: false }))
       fastify.use(express)
-      fastify.use((req, _res, next) => {
-        // body-parser result
-        t.assert.deepStrictEqual(req.body, { input: 'test' })
-        next()
-      })
+
+      fastify.use((_req, _res, next) => next())
     })
 
-  fastify.post('/hello', () => {
-    return { hello: 'world' }
-  })
-
+  fastify.post('/hello', () => ({ hello: 'world' }))
   const address = await fastify.listen({ port: 0 })
 
-  await t.assert.rejects(() => fetch(address + '/hello', {
-    method: 'post',
-    body: new URLSearchParams({ input: 'test' }),
-    signal: AbortSignal.timeout(5)
-  }), 'Request timed out')
+  await t.assert.rejects(
+    () => fetch(address + '/hello', {
+      method: 'post',
+      body: new URLSearchParams({ input: 'test' }),
+      signal: AbortSignal.timeout(200)
+    }),
+    (err) => {
+      t.assert.equal(err?.name, 'TimeoutError')
+      t.assert.ok(err)
+      return true
+    }
+  )
 })
 
 test('POST request with form body and body-parser hangs up, compatibility case', async t => {

@@ -2,7 +2,6 @@
 
 const fp = require('fastify-plugin')
 const Express = require('express')
-const FindMyWay = require('find-my-way')
 const kMiddlewares = Symbol('fastify-express-middlewares')
 
 function fastifyExpress (fastify, options, next) {
@@ -43,9 +42,7 @@ function fastifyExpress (fastify, options, next) {
 
     const { url } = req.raw
 
-    const decodedUrl = FindMyWay.sanitizeUrlPath(url)
-    // Decode URL before Express matches middleware to prevent encoded path bypass
-    // e.g., /%61dmin should match middleware registered on /admin
+    const decodedUrl = decodeURI(url)
     req.raw.url = decodedUrl
     req.raw.originalUrl = url
     req.raw.id = req.id
