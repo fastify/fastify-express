@@ -100,12 +100,16 @@ function fastifyExpress (fastify, options, next) {
 
   function onRegister (instance) {
     const middlewares = instance[kMiddlewares].slice()
-    instance[kMiddlewares] = []
+    instance[kMiddlewares] = middlewares.slice()
     instance.decorate('express', Express())
     instance.express.disable('x-powered-by')
     instance.decorate('use', use)
-    for (const middleware of middlewares) {
-      instance.use(...middleware)
+    for (const [path, fn] of middlewares) {
+      if (fn == null) {
+        instance.express.use(path)
+      } else {
+        instance.express.use(path, fn)
+      }
     }
   }
 

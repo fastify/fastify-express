@@ -221,6 +221,52 @@ test('middlewares with prefix', async t => {
   })
 })
 
+test('should not double-prefix inherited middleware paths in child scopes', async t => {
+  t.plan(4)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  instance.use('/admin', function (req, res, next) {
+    if (req.headers.authorization == null) {
+      res.statusCode = 403
+      res.end('forbidden')
+      return
+    }
+
+    next()
+  })
+
+  instance.get('/admin/root-data', async function () {
+    return { data: 'root-secret' }
+  })
+
+  await instance.register(async function (child) {
+    child.get('/secret', async function () {
+      return { data: 'child-secret' }
+    })
+  }, { prefix: '/admin' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const rootNoAuth = await fetch(address + '/admin/root-data')
+  t.assert.deepStrictEqual(rootNoAuth.status, 403)
+
+  const childNoAuth = await fetch(address + '/admin/secret')
+  t.assert.deepStrictEqual(childNoAuth.status, 403)
+
+  const childWithAuth = await fetch(address + '/admin/secret', {
+    headers: {
+      authorization: 'Bearer test'
+    }
+  })
+
+  t.assert.deepStrictEqual(childWithAuth.status, 200)
+  t.assert.deepStrictEqual(await childWithAuth.json(), { data: 'child-secret' })
+})
+
 test('res.end should block middleware execution', async t => {
   t.plan(4)
 
