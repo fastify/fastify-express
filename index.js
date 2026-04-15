@@ -10,6 +10,10 @@ function fastifyExpress (fastify, options, next) {
     createProxyHandler
   } = options
 
+  const routerOptions = fastify.initialConfig.routerOptions || {}
+  const ignoreDuplicateSlashes = routerOptions.ignoreDuplicateSlashes ?? fastify.initialConfig.ignoreDuplicateSlashes
+  const useSemicolonDelimiter = routerOptions.useSemicolonDelimiter ?? fastify.initialConfig.useSemicolonDelimiter
+
   fastify.decorate('use', use)
   fastify[kMiddlewares] = []
   fastify.decorate('express', Express())
@@ -43,7 +47,12 @@ function fastifyExpress (fastify, options, next) {
     const { url } = req.raw
 
     const decodedUrl = decodeURI(url)
-    req.raw.url = decodedUrl
+    const normalizedUrl = normalizeUrl(decodedUrl, {
+      ignoreDuplicateSlashes,
+      useSemicolonDelimiter
+    })
+
+    req.raw.url = normalizedUrl
     req.raw.originalUrl = url
     req.raw.id = req.id
     req.raw.hostname = req.hostname
@@ -53,7 +62,7 @@ function fastifyExpress (fastify, options, next) {
     reply.raw.log = req.log
     reply.raw.send = function send (...args) {
       // Restore req.raw.url to its original value https://github.com/fastify/fastify-express/issues/11
-      req.raw.url = decodedUrl
+      req.raw.url = normalizedUrl
       return reply.send.apply(reply, args)
     }
 
@@ -101,6 +110,55 @@ function fastifyExpress (fastify, options, next) {
   }
 
   next()
+}
+
+function normalizeUrl (url, options) {
+  const {
+    ignoreDuplicateSlashes,
+    useSemicolonDelimiter
+  } = options
+
+  const { path, query } = splitPathAndQuery(url, useSemicolonDelimiter)
+  const normalizedPath = ignoreDuplicateSlashes ? removeDuplicateSlashes(path) : path
+
+  return normalizedPath + query
+}
+
+function splitPathAndQuery (url, useSemicolonDelimiter) {
+  const queryIndex = url.indexOf('?')
+
+  if (!useSemicolonDelimiter) {
+    if (queryIndex === -1) {
+      return { path: url, query: '' }
+    }
+
+    return {
+      path: url.slice(0, queryIndex),
+      query: url.slice(queryIndex)
+    }
+  }
+
+  const semicolonIndex = url.indexOf(';')
+
+  if (semicolonIndex === -1 || (queryIndex !== -1 && queryIndex < semicolonIndex)) {
+    if (queryIndex === -1) {
+      return { path: url, query: '' }
+    }
+
+    return {
+      path: url.slice(0, queryIndex),
+      query: url.slice(queryIndex)
+    }
+  }
+
+  return {
+    path: url.slice(0, semicolonIndex),
+    query: `?${url.slice(semicolonIndex + 1)}`
+  }
+}
+
+function removeDuplicateSlashes (path) {
+  return path.replace(/\/{2,}/g, '/')
 }
 
 module.exports = fp(fastifyExpress, {
