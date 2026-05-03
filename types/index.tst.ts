@@ -1,6 +1,6 @@
 import Fastify, { FastifyRequest } from 'fastify'
 import fastifyExpress from '..'
-import { expectType } from 'tsd'
+import { expect } from 'tstyche'
 import { Application } from 'express'
 
 const app = Fastify()
@@ -10,13 +10,13 @@ app.register(fastifyExpress, {
   expressHook: 'onRequest',
   createProxyHandler: (fastifyReq) => ({
     set (target, prop, value) {
-      expectType<FastifyRequest>(fastifyReq)
+      expect(fastifyReq).type.toBe<FastifyRequest>()
       return Reflect.set(target, prop, value)
     }
   })
 })
 
-expectType<Application>(app.express)
+expect(app.express).type.toBe<Application>()
 
 app.express.disable('x-powered-by')
 

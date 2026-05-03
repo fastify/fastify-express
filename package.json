@@ -10,7 +10,7 @@
     "lint:fix": "eslint --fix",
     "test": "npm run test:unit && npm run test:typescript",
     "test:unit": "c8 --100 --reporter html node --test",
-    "test:typescript": "tsd"
+    "test:typescript": "tstyche"
   },
   "repository": {
     "type": "git",
@@ -72,14 +72,11 @@
     "passport": "^0.7.0",
     "passport-http-bearer": "^1.0.1",
     "serve-static": "^2.2.0",
-    "tsd": "^0.33.0"
+    "tstyche": "^7.0.0"
   },
   "dependencies": {
     "express": "^5.2.1",
     "fastify-plugin": "^5.0.0"
-  },
-  "tsd": {
-    "directory": "test/types"
   },
   "publishConfig": {
     "access": "public"
