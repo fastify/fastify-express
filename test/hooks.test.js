@@ -5,6 +5,72 @@ const Fastify = require('fastify')
 const express = require('express')
 const expressPlugin = require('../index')
 
+test('express error middlewares chained via next(err) must not crash the process when the first middleware already sent a response', async t => {
+  t.plan(2)
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  await fastify.register(expressPlugin)
+
+  const app = express()
+
+  app.get('/foo', (_req, _res, next) => {
+    next(new Error('route error'))
+  })
+
+  // First error middleware: send a response, then pass the error along.
+  app.use((err, _req, res, next) => {
+    res.status(500).json({ error: err.message })
+    next(err)
+  })
+
+  // Second error middleware: should skip sending because headersSent is true.
+  app.use((_err, _req, res, _next) => {
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'fallback' })
+    }
+  })
+
+  fastify.use(app)
+
+  const address = await fastify.listen({ port: 0 })
+  const result = await fetch(`${address}/foo`)
+  t.assert.deepStrictEqual(result.status, 500)
+  t.assert.deepStrictEqual(await result.json(), { error: 'route error' })
+})
+
+test('express error middleware that sends unconditionally must not crash the process after the first send', async t => {
+  t.plan(2)
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  await fastify.register(expressPlugin)
+
+  const app = express()
+
+  app.get('/bar', (_req, _res, next) => {
+    next(new Error('route error'))
+  })
+
+  // First error middleware sends and forwards the error.
+  app.use((err, _req, res, next) => {
+    res.status(500).json({ error: err.message })
+    next(err)
+  })
+
+  // Second error middleware sends unconditionally — exercises the replySent guard.
+  app.use((_err, _req, res, _next) => {
+    res.status(500).json({ error: 'should be blocked by replySent guard' })
+  })
+
+  fastify.use(app)
+
+  const address = await fastify.listen({ port: 0 })
+  const result = await fetch(`${address}/bar`)
+  t.assert.deepStrictEqual(result.status, 500)
+  t.assert.deepStrictEqual(await result.json(), { error: 'route error' })
+})
+
 test('onSend hook should receive valid request and reply objects if middleware fails', async t => {
   t.plan(3)
   const fastify = Fastify()

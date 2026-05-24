@@ -60,7 +60,14 @@ function fastifyExpress (fastify, options, next) {
     req.raw.ips = req.ips
     req.raw.log = req.log
     reply.raw.log = req.log
+
+    let replySent = false
     reply.raw.send = function send (...args) {
+      if (replySent) {
+        return
+      }
+
+      replySent = true
       // Restore req.raw.url to its original value https://github.com/fastify/fastify-express/issues/11
       req.raw.url = normalizedUrl
       return reply.send.apply(reply, args)
@@ -76,11 +83,17 @@ function fastifyExpress (fastify, options, next) {
       req.raw.cookies = req.cookies
     }
 
-    // Make it lazy as it does a bit of work
+    // ** Request **
     Object.defineProperty(req.raw, 'protocol', {
       get () {
         return req.protocol
       }
+    })
+
+    // ** Response **
+    Object.defineProperty(reply.raw, 'headersSent', {
+      get () { return replySent },
+      configurable: true
     })
 
     next()
