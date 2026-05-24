@@ -25,7 +25,7 @@ test('express error middlewares chained via next(err) must not crash the process
   })
 
   // Second error middleware: should skip sending because headersSent is true.
-  app.use((err, _req, res, _next) => {
+  app.use((_err, _req, res, _next) => {
     if (!res.headersSent) {
       res.status(500).json({ error: 'fallback' })
     }
@@ -59,7 +59,7 @@ test('express error middleware that sends unconditionally must not crash the pro
   })
 
   // Second error middleware sends unconditionally — exercises the replySent guard.
-  app.use((err, _req, res, _next) => {
+  app.use((_err, _req, res, _next) => {
     res.status(500).json({ error: 'should be blocked by replySent guard' })
   })
 

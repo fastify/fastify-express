@@ -83,14 +83,14 @@ function fastifyExpress (fastify, options, next) {
       req.raw.cookies = req.cookies
     }
 
-    // ** Request ** 
+    // ** Request **
     Object.defineProperty(req.raw, 'protocol', {
       get () {
         return req.protocol
       }
     })
 
-    // ** Response ** 
+    // ** Response **
     Object.defineProperty(reply.raw, 'headersSent', {
       get () { return replySent },
       configurable: true
