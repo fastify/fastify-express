@@ -76,7 +76,7 @@
   },
   "dependencies": {
     "express": "^5.2.1",
-    "fastify-plugin": "^5.0.0"
+    "fastify-plugin": "^6.0.0"
   },
   "publishConfig": {
     "access": "public"
