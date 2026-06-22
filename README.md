@@ -4,7 +4,7 @@
 [![NPM version](https://img.shields.io/npm/v/@fastify/express.svg?style=flat)](https://www.npmjs.com/package/@fastify/express)
 [![neostandard javascript style](https://img.shields.io/badge/code_style-neostandard-brightgreen?style=flat)](https://github.com/neostandard/neostandard)
 
-This plugin adds full [Express](http://expressjs.com) compatibility to Fastify, it exposes the same `use` function of Express, and it allows you to use any Express middleware or application.<br/>
+This plugin adds full [Express](https://expressjs.com) compatibility to Fastify, it exposes the same `use` function of Express, and it allows you to use any Express middleware or application.<br/>
 
 <table>
   <tbody>
