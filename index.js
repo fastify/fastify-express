@@ -25,9 +25,13 @@ function fastifyExpress (fastify, options, next) {
     .addHook('onRegister', onRegister)
 
   function use (path, fn) {
+    const prefix = this.prefix
     if (typeof path === 'string') {
-      const prefix = this.prefix
       path = prefix + (path === '/' && prefix.length > 0 ? '' : path)
+    } else if (Array.isArray(path) && path.length > 0 && typeof path[0] !== 'function') {
+      path = path.map(p => prefixMountPath(p, prefix))
+    } else if (path instanceof RegExp && prefix.length > 0) {
+      path = prefixRegExp(path, prefix)
     }
     this[kMiddlewares].push([path, fn])
     if (fn == null) {
@@ -176,6 +180,27 @@ function splitPathAndQuery (url, useSemicolonDelimiter) {
 
 function removeDuplicateSlashes (path) {
   return path.replace(/\/{2,}/g, '/')
+}
+
+function prefixMountPath (p, prefix) {
+  if (typeof p === 'string') {
+    return prefix + (p === '/' && prefix.length > 0 ? '' : p)
+  }
+  if (p instanceof RegExp && prefix.length > 0) {
+    return prefixRegExp(p, prefix)
+  }
+  /* c8 ignore next */
+  return p
+}
+
+function prefixRegExp (re, prefix) {
+  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const inner = re.source.replace(/(?:^|(?<=\|))\^/g, '')
+  const hasAnchor = inner !== re.source
+  const source = hasAnchor
+    ? '^' + escapedPrefix + '(?:' + inner + ')'
+    : escapedPrefix + '(?:' + re.source + ')'
+  return new RegExp(source, re.flags)
 }
 
 module.exports = fp(fastifyExpress, {

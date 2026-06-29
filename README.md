@@ -206,6 +206,11 @@ async function subsystem (fastify, opts) {
 }
 ```
 
+> **Note:** In prefixed plugins, `@fastify/express` rewrites string, array, and
+> RegExp mount paths to include the prefix. RegExp paths with `^` anchors inside
+> groups (e.g., `/(?:^\/a|^\/b)/`) are not rewritten correctly. Use array paths
+> instead: `fastify.use(['/a', '/b'], middleware)`.
+
 ### Wrap Express req in Proxy
 
 It is possible to wrap the Express request object in a Proxy by passing `createProxyHandler` function to generate the Proxy handler. The function will receive the Fastify request object as the first parameter.

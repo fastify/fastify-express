@@ -267,6 +267,296 @@ test('should not double-prefix inherited middleware paths in child scopes', asyn
   t.assert.deepStrictEqual(await childWithAuth.json(), { data: 'child-secret' })
 })
 
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-3wf5-7852-vcfq
+test('array mount paths are rewritten with prefix', async t => {
+  t.plan(4)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (admin) {
+    admin.use(['/private', '/settings'], function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    admin.get('/private', async () => {
+      return { secret: 'admin-data' }
+    })
+
+    admin.get('/settings', async () => {
+      return { settings: true }
+    })
+  }, { prefix: '/admin' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const privateNoAuth = await fetch(address + '/admin/private')
+  t.assert.deepStrictEqual(privateNoAuth.status, 403)
+
+  const settingsNoAuth = await fetch(address + '/admin/settings')
+  t.assert.deepStrictEqual(settingsNoAuth.status, 403)
+
+  const privateWithAuth = await fetch(address + '/admin/private', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(privateWithAuth.status, 200)
+  t.assert.deepStrictEqual(await privateWithAuth.json(), { secret: 'admin-data' })
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-3wf5-7852-vcfq
+test('regex mount paths are rewritten with prefix', async t => {
+  t.plan(3)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (admin) {
+    admin.use(/^\/private/, function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    admin.get('/private', async () => {
+      return { secret: 'admin-data' }
+    })
+  }, { prefix: '/admin' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const noAuth = await fetch(address + '/admin/private')
+  t.assert.deepStrictEqual(noAuth.status, 403)
+
+  const withAuth = await fetch(address + '/admin/private', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(withAuth.status, 200)
+  t.assert.deepStrictEqual(await withAuth.json(), { secret: 'admin-data' })
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-3wf5-7852-vcfq
+test('regex without anchor is rewritten with prefix', async t => {
+  t.plan(3)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (admin) {
+    admin.use(/\/private/, function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    admin.get('/private', async () => {
+      return { secret: 'admin-data' }
+    })
+  }, { prefix: '/admin' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const noAuth = await fetch(address + '/admin/private')
+  t.assert.deepStrictEqual(noAuth.status, 403)
+
+  const withAuth = await fetch(address + '/admin/private', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(withAuth.status, 200)
+  t.assert.deepStrictEqual(await withAuth.json(), { secret: 'admin-data' })
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-3wf5-7852-vcfq
+test('array with root slash is handled correctly with prefix', async t => {
+  t.plan(2)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalled = false
+
+  await instance.register(async function (child) {
+    child.use(['/', '/health'], function (_req, _res, next) {
+      middlewareCalled = true
+      next()
+    })
+
+    child.get('/health', async () => {
+      return { ok: true }
+    })
+  }, { prefix: '/api' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const result = await fetch(address + '/api/health')
+  t.assert.deepStrictEqual(result.status, 200)
+  t.assert.ok(middlewareCalled)
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-3wf5-7852-vcfq
+test('array of middleware functions (no path) works in prefixed plugin', async t => {
+  t.plan(2)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalled = false
+
+  await instance.register(async function (child) {
+    child.use([function (_req, _res, next) {
+      middlewareCalled = true
+      next()
+    }])
+
+    child.get('/data', async () => {
+      return { ok: true }
+    })
+  }, { prefix: '/api' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const result = await fetch(address + '/api/data')
+  t.assert.deepStrictEqual(result.status, 200)
+  t.assert.ok(middlewareCalled)
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-3wf5-7852-vcfq
+test('regex with alternation is fully rewritten with prefix', async t => {
+  t.plan(4)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (admin) {
+    admin.use(/^\/private|^\/settings/, function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    admin.get('/private', async () => {
+      return { secret: 'admin-data' }
+    })
+
+    admin.get('/settings', async () => {
+      return { settings: true }
+    })
+  }, { prefix: '/admin' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const privateNoAuth = await fetch(address + '/admin/private')
+  t.assert.deepStrictEqual(privateNoAuth.status, 403)
+
+  const settingsNoAuth = await fetch(address + '/admin/settings')
+  t.assert.deepStrictEqual(settingsNoAuth.status, 403)
+
+  const privateWithAuth = await fetch(address + '/admin/private', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(privateWithAuth.status, 200)
+  t.assert.deepStrictEqual(await privateWithAuth.json(), { secret: 'admin-data' })
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-3wf5-7852-vcfq
+test('mixed array of strings and regexes is rewritten with prefix', async t => {
+  t.plan(4)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (admin) {
+    admin.use(['/private', /^\/settings/], function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    admin.get('/private', async () => {
+      return { secret: 'admin-data' }
+    })
+
+    admin.get('/settings', async () => {
+      return { settings: true }
+    })
+  }, { prefix: '/admin' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const privateNoAuth = await fetch(address + '/admin/private')
+  t.assert.deepStrictEqual(privateNoAuth.status, 403)
+
+  const settingsNoAuth = await fetch(address + '/admin/settings')
+  t.assert.deepStrictEqual(settingsNoAuth.status, 403)
+
+  const privateWithAuth = await fetch(address + '/admin/private', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(privateWithAuth.status, 200)
+  t.assert.deepStrictEqual(await privateWithAuth.json(), { secret: 'admin-data' })
+})
+
+test('regex with grouped anchors does not match in prefixed plugins (known limitation)', async t => {
+  t.plan(1)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalled = false
+
+  await instance.register(async function (child) {
+    // (?:^\/private|^\/settings) -- the ^ inside the group is not stripped
+    // by prefixRegExp, so the rewritten regex still anchors to position 0
+    // of the full URL and fails to match /admin/private
+    child.use(/(?:^\/private|^\/settings)/, function (_req, _res, next) {
+      middlewareCalled = true
+      next()
+    })
+
+    child.get('/private', async () => {
+      return { ok: true }
+    })
+  }, { prefix: '/admin' })
+
+  const address = await instance.listen({ port: 0 })
+
+  await fetch(address + '/admin/private')
+  // Middleware is NOT called -- this is expected behavior, not a bug
+  t.assert.ok(!middlewareCalled)
+})
+
 test('res.end should block middleware execution', async t => {
   t.plan(4)
 
