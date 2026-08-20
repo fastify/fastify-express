@@ -59,7 +59,7 @@
     }
   ],
   "devDependencies": {
-    "@fastify/formbody": "^8.0.0",
+    "@fastify/formbody": "^9.0.0",
     "@types/express": "^5.0.0",
     "@types/node": "*",
     "body-parser": "^1.20.2",
