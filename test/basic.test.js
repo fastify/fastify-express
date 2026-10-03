@@ -1,6 +1,7 @@
 'use strict'
 
 const { test } = require('node:test')
+const cookieParser = require('cookie-parser')
 const Fastify = require('fastify')
 const cors = require('cors')
 const passport = require('passport')
@@ -542,4 +543,26 @@ test('Should support plugin level prefix', async t => {
   const result = await fetch(address + '/hello/world')
   t.assert.deepStrictEqual(result.headers.get('x-foo'), 'bar')
   t.assert.deepStrictEqual(await result.json(), { hello: 'world' })
+})
+
+test('Should support cookie-parser backward compatibility', async t => {
+  t.plan(2)
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify
+    .register(expressPlugin)
+    .after(() => { fastify.use(cookieParser()) })
+
+  fastify.get('/', async req => {
+    return req.raw.cookies
+  })
+
+  const address = await fastify.listen({ port: 0 })
+  const result = await fetch(address, {
+    headers: { cookie: 'foo=bar' }
+  })
+
+  t.assert.deepStrictEqual(result.status, 200)
+  t.assert.deepStrictEqual(await result.json(), { foo: 'bar' })
 })
