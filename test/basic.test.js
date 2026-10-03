@@ -66,6 +66,28 @@ test('Should support connect style middlewares (async await after)', async t => 
   t.assert.deepStrictEqual(await result.json(), { hello: 'world' })
 })
 
+test('Should expose Fastify cookies to Express middleware', async t => {
+  t.plan(2)
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addHook('onRequest', (request, _reply, done) => {
+    request.cookies = { session: 'cookie-value' }
+    done()
+  })
+
+  await fastify.register(expressPlugin)
+  fastify.use((request, _response, next) => {
+    t.assert.deepStrictEqual(request.cookies, { session: 'cookie-value' })
+    next()
+  })
+
+  fastify.get('/', async () => ({ hello: 'world' }))
+
+  const response = await fastify.inject('/')
+  t.assert.strictEqual(response.statusCode, 200)
+})
+
 test('Should support per path middlewares', async t => {
   t.plan(2)
   const fastify = Fastify()
