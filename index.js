@@ -49,15 +49,21 @@ function fastifyExpress (fastify, options, next) {
     }
 
     const { url } = req.raw
+    req.raw.originalUrl = url
 
-    const decodedUrl = decodeURI(url)
-    const normalizedUrl = normalizeUrl(decodedUrl, {
+    const normalizedUrl = normalizeUrl(url, {
       ignoreDuplicateSlashes,
       useSemicolonDelimiter
     })
 
+    if (normalizedUrl === null) {
+      const error = new Error('Invalid URL')
+      error.statusCode = 400
+      next(error)
+      return
+    }
+
     req.raw.url = normalizedUrl
-    req.raw.originalUrl = url
     req.raw.id = req.id
     req.raw.hostname = req.hostname
     req.raw.ip = req.ip
@@ -138,10 +144,55 @@ function normalizeUrl (url, options) {
     useSemicolonDelimiter
   } = options
 
-  const { path, query } = splitPathAndQuery(url, useSemicolonDelimiter)
+  // Match find-my-way's absolute-form handling before normalizing the path.
+  const originFormUrl = getPathFromAbsoluteUrl(url)
+  if (originFormUrl === null) {
+    return null
+  }
+
+  let decodedUrl
+  try {
+    decodedUrl = decodeURI(originFormUrl)
+  } catch {
+    return null
+  }
+
+  const { path, query } = splitPathAndQuery(decodedUrl, useSemicolonDelimiter)
   const normalizedPath = ignoreDuplicateSlashes ? removeDuplicateSlashes(path) : path
 
   return normalizedPath + query
+}
+
+function getPathFromAbsoluteUrl (url) {
+  const scheme = /^https?:\/\//i.exec(url)
+  if (scheme === null) {
+    return url
+  }
+
+  const authorityStart = scheme[0].length
+  const pathStart = url.indexOf('/', authorityStart)
+  const queryStart = url.indexOf('?', authorityStart)
+  const fragmentStart = url.indexOf('#', authorityStart)
+
+  let authorityEnd = url.length
+  if (pathStart !== -1) {
+    authorityEnd = pathStart
+  }
+  if (queryStart !== -1 && queryStart < authorityEnd) {
+    authorityEnd = queryStart
+  }
+
+  if (fragmentStart !== -1 || authorityEnd === authorityStart || !URL.canParse(url)) {
+    return null
+  }
+
+  if (authorityEnd === url.length) {
+    return '/'
+  }
+  if (authorityEnd === queryStart) {
+    return '/' + url.slice(queryStart)
+  }
+  return url.slice(pathStart)
 }
 
 function splitPathAndQuery (url, useSemicolonDelimiter) {
