@@ -2,7 +2,10 @@
 
 const fp = require('fastify-plugin')
 const Express = require('express')
+const parseUrl = require('parseurl')
+const { parse, pathToRegexp } = require('path-to-regexp')
 const kMiddlewares = Symbol('fastify-express-middlewares')
+const kDynamicMountMatchers = Symbol('fastify-express-dynamic-mount-matchers')
 
 function fastifyExpress (fastify, options, next) {
   const {
@@ -16,6 +19,7 @@ function fastifyExpress (fastify, options, next) {
 
   fastify.decorate('use', use)
   fastify[kMiddlewares] = []
+  fastify[kDynamicMountMatchers] = []
   fastify.decorate('express', Express())
   fastify.express.disable('x-powered-by')
 
@@ -34,6 +38,7 @@ function fastifyExpress (fastify, options, next) {
       path = prefixRegExp(path, prefix)
     }
     this[kMiddlewares].push([path, fn])
+    this[kDynamicMountMatchers].push(...compileDynamicMountMatchers(path))
     if (fn == null) {
       this.express.use(path)
     } else {
@@ -109,6 +114,13 @@ function fastifyExpress (fastify, options, next) {
   }
 
   function runConnect (req, reply, next) {
+    if (hasBlankRouteParam(req.params) && hasAmbiguousDynamicMount(this[kDynamicMountMatchers], req.raw)) {
+      const error = new Error('Invalid route parameter')
+      error.statusCode = 400
+      next(error)
+      return
+    }
+
     if (this[kMiddlewares].length > 0) {
       for (const [headerName, headerValue] of Object.entries(reply.getHeaders())) {
         reply.raw.setHeader(headerName, headerValue)
@@ -122,7 +134,9 @@ function fastifyExpress (fastify, options, next) {
 
   function onRegister (instance) {
     const middlewares = instance[kMiddlewares].slice()
+    const dynamicMountMatchers = instance[kDynamicMountMatchers].slice()
     instance[kMiddlewares] = middlewares.slice()
+    instance[kDynamicMountMatchers] = dynamicMountMatchers.slice()
     instance.decorate('express', Express())
     instance.express.disable('x-powered-by')
     instance.decorate('use', use)
@@ -136,6 +150,63 @@ function fastifyExpress (fastify, options, next) {
   }
 
   next()
+}
+
+function compileDynamicMountMatchers (path) {
+  const paths = Array.isArray(path) ? path : [path]
+  const matchers = []
+
+  for (const mountPath of paths) {
+    if (typeof mountPath !== 'string') {
+      continue
+    }
+
+    const compiled = compileTokens(parse(mountPath).tokens)
+    if (compiled.dynamic) {
+      matchers.push({
+        express: pathToRegexp(mountPath, { end: false }).regexp,
+        permissive: new RegExp(`^(?:${compiled.source})(?:\\/$)?(?=\\/|$)`, 'i')
+      })
+    }
+  }
+
+  return matchers
+}
+
+function compileTokens (tokens) {
+  let source = ''
+  let dynamic = false
+
+  for (const token of tokens) {
+    if (token.type === 'text') {
+      source += token.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    } else if (token.type === 'param') {
+      source += '[^/]*'
+      dynamic = true
+    } else if (token.type === 'wildcard') {
+      source += '.*'
+      dynamic = true
+    } else if (token.type === 'group') {
+      const group = compileTokens(token.tokens)
+      source += `(?:${group.source})?`
+      dynamic ||= group.dynamic
+    }
+  }
+
+  return { source, dynamic }
+}
+
+function hasBlankRouteParam (params) {
+  return params != null && Object.values(params).some(value => {
+    return typeof value === 'string' && value.trim().length === 0
+  })
+}
+
+function hasAmbiguousDynamicMount (matchers, rawRequest) {
+  const path = parseUrl(rawRequest).pathname
+  return matchers.some(matcher => {
+    return !matcher.express.test(path) && matcher.permissive.test(path)
+  })
 }
 
 function normalizeUrl (url, options) {

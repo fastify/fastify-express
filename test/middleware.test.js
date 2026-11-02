@@ -756,6 +756,102 @@ test('middlewares for encoded paths', async t => {
   })
 })
 
+test('reject ambiguous blank parameters for dynamic middleware mounts', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  const middlewareCalls = []
+  function block (name) {
+    return function (_req, res) {
+      middlewareCalls.push(name)
+      res.statusCode = 403
+      res.end('blocked')
+    }
+  }
+
+  instance.use('/tenant/:tenantId', block('tenant'))
+  instance.use('/nested/:one/:two', block('nested'))
+  instance.use('/files/*splat', block('files'))
+  instance.use(['/array/:id', /^\/regex/], block('array'))
+  instance.use('/group{/:id}/private', block('group'))
+  instance.use('/static-parent', block('static-parent'))
+
+  instance.get('/tenant/:tenantId', async request => request.params)
+  instance.get('/nested/:one/:two', async request => request.params)
+  instance.get('/files/*', async request => request.params)
+  instance.get('/array/:id', async request => request.params)
+  instance.get('/group/:id/private', async request => request.params)
+  instance.get('/static-parent/:id', async request => request.params)
+  instance.get('/unrelated/:id', async request => request.params)
+
+  await instance.register(async child => {
+    child.use('/child/:id', block('child'))
+    child.get('/child/:id', async request => request.params)
+  }, { prefix: '/api' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const nonEmpty = await fetch(address + '/tenant/acme')
+  t.assert.deepStrictEqual(nonEmpty.status, 403)
+  t.assert.deepStrictEqual(middlewareCalls, ['tenant'])
+
+  middlewareCalls.length = 0
+  const interiorWhitespace = await fetch(address + '/nested/%20/value')
+  t.assert.deepStrictEqual(interiorWhitespace.status, 403)
+  t.assert.deepStrictEqual(middlewareCalls, ['nested'])
+
+  for (const path of [
+    '/tenant/',
+    '/tenant/?query=value',
+    '/tenant/%20',
+    '/tenant/%09',
+    '/nested//value',
+    '/nested/value/',
+    '/files/',
+    '/array/',
+    '/group//private',
+    '/api/child/'
+  ]) {
+    middlewareCalls.length = 0
+    const response = await fetch(address + path)
+    t.assert.deepStrictEqual(response.status, 400, path)
+    t.assert.deepStrictEqual(middlewareCalls, [], path)
+  }
+
+  const staticParent = await fetch(address + '/static-parent/')
+  t.assert.deepStrictEqual(staticParent.status, 403)
+  t.assert.deepStrictEqual(middlewareCalls, ['static-parent'])
+
+  middlewareCalls.length = 0
+  const unrelated = await fetch(address + '/unrelated/')
+  t.assert.deepStrictEqual(unrelated.status, 200)
+  t.assert.deepStrictEqual(await unrelated.json(), { id: '' })
+  t.assert.deepStrictEqual(middlewareCalls, [])
+})
+
+test('allow blank parameters when no dynamic middleware mount applies', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalls = 0
+  instance.use(function (_req, _res, next) {
+    middlewareCalls++
+    next()
+  })
+  instance.get('/open/:id', async request => request.params)
+
+  const address = await instance.listen({ port: 0 })
+  const response = await fetch(address + '/open/')
+
+  t.assert.deepStrictEqual(response.status, 200)
+  t.assert.deepStrictEqual(await response.json(), { id: '' })
+  t.assert.deepStrictEqual(middlewareCalls, 1)
+})
+
 async function checkEncodedPath (routeUrl, requestUrl, t) {
   t.plan(6)
 
