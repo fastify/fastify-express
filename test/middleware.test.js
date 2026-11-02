@@ -793,3 +793,238 @@ async function checkEncodedPath (routeUrl, requestUrl, t) {
   t.assert.ok(response.ok)
   t.assert.deepStrictEqual(body, { slashed: true })
 }
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-84w6-xrf3-f8q8
+// A parameterized prefix must not be treated as literal text when rewriting a
+// RegExp mount path, otherwise the middleware is skipped and auth is bypassed.
+test('regex mount paths are rewritten with a parameterized prefix', async t => {
+  t.plan(4)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (tenant) {
+    tenant.use(/^\/private/, function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    tenant.get('/private', async () => {
+      return { secret: 'tenant-data' }
+    })
+  }, { prefix: '/tenant/:tenantId' })
+
+  const address = await instance.listen({ port: 0 })
+
+  // A non-empty parameter value must reach the middleware.
+  const noAuth = await fetch(address + '/tenant/acme/private')
+  t.assert.deepStrictEqual(noAuth.status, 403)
+
+  // An empty parameter is still routed by Fastify, so the middleware must run.
+  const emptyParam = await fetch(address + '/tenant//private')
+  t.assert.deepStrictEqual(emptyParam.status, 403)
+
+  const withAuth = await fetch(address + '/tenant/acme/private', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(withAuth.status, 200)
+  t.assert.deepStrictEqual(await withAuth.json(), { secret: 'tenant-data' })
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-84w6-xrf3-f8q8
+test('regex without anchor is rewritten with a parameterized prefix', async t => {
+  t.plan(3)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (tenant) {
+    tenant.use(/\/private/, function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    tenant.get('/private', async () => {
+      return { secret: 'tenant-data' }
+    })
+  }, { prefix: '/tenant/:tenantId' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const noAuth = await fetch(address + '/tenant/acme/private')
+  t.assert.deepStrictEqual(noAuth.status, 403)
+
+  const withAuth = await fetch(address + '/tenant/acme/private', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(withAuth.status, 200)
+  t.assert.deepStrictEqual(await withAuth.json(), { secret: 'tenant-data' })
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-84w6-xrf3-f8q8
+// An escaped colon (`::`) in a prefix maps to a single `:` in the request URL.
+test('regex mount paths with an escaped-colon prefix', async t => {
+  t.plan(2)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (child) {
+    child.use(/^\/x/, function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    child.get('/x', async () => {
+      return { ok: true }
+    })
+  }, { prefix: '/a::b' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const noAuth = await fetch(address + '/a:b/x')
+  t.assert.deepStrictEqual(noAuth.status, 403)
+
+  const withAuth = await fetch(address + '/a:b/x', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(withAuth.status, 200)
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-84w6-xrf3-f8q8
+// A custom-regex parameter keeps its constraint when rewriting a RegExp mount.
+test('regex mount paths with a custom-regex parameter prefix', async t => {
+  t.plan(3)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (user) {
+    user.use(/^\/x/, function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    user.get('/x', async () => {
+      return { ok: true }
+    })
+  }, { prefix: '/user/:id(\\d+)' })
+
+  const address = await instance.listen({ port: 0 })
+
+  // The constraint is honoured: a non-digit param is not routed by Fastify.
+  const nonDigit = await fetch(address + '/user/abc/x')
+  t.assert.deepStrictEqual(nonDigit.status, 404)
+
+  const noAuth = await fetch(address + '/user/123/x')
+  t.assert.deepStrictEqual(noAuth.status, 403)
+
+  const withAuth = await fetch(address + '/user/123/x', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(withAuth.status, 200)
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-84w6-xrf3-f8q8
+// A parameter immediately followed by a static fragment is still matched.
+test('regex mount paths with a parameter followed by a static fragment', async t => {
+  t.plan(2)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (order) {
+    order.use(/^\/x/, function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    order.get('/x', async () => {
+      return { ok: true }
+    })
+  }, { prefix: '/orders/:id-edit' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const noAuth = await fetch(address + '/orders/123-edit/x')
+  t.assert.deepStrictEqual(noAuth.status, 403)
+
+  const withAuth = await fetch(address + '/orders/123-edit/x', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(withAuth.status, 200)
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-84w6-xrf3-f8q8
+// Array mount paths containing a RegExp are rewritten with a parameterized prefix.
+test('array mount paths are rewritten with a parameterized prefix', async t => {
+  t.plan(4)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (tenant) {
+    tenant.use(['/private', /^\/settings/], function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    tenant.get('/private', async () => {
+      return { secret: 'tenant-data' }
+    })
+
+    tenant.get('/settings', async () => {
+      return { settings: true }
+    })
+  }, { prefix: '/tenant/:tenantId' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const privateNoAuth = await fetch(address + '/tenant/acme/private')
+  t.assert.deepStrictEqual(privateNoAuth.status, 403)
+
+  const settingsNoAuth = await fetch(address + '/tenant/acme/settings')
+  t.assert.deepStrictEqual(settingsNoAuth.status, 403)
+
+  const privateWithAuth = await fetch(address + '/tenant/acme/private', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(privateWithAuth.status, 200)
+  t.assert.deepStrictEqual(await privateWithAuth.json(), { secret: 'tenant-data' })
+})

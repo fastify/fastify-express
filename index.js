@@ -243,8 +243,73 @@ function prefixMountPath (p, prefix) {
   return p
 }
 
+const ESCAPE_REGEXP = /[.*+?^${}()|[\]\\]/g
+
+// Translate a Fastify route prefix (e.g. `/tenant/:tenantId`, `/a::b`,
+// `/user/:id(\\d+)`) into a RegExp source that matches the concrete URLs
+// Fastify routes to the plugin. Without this, `prefixRegExp` escaped the prefix
+// wholesale and treated `:param` as literal text, so RegExp-mounted middleware
+// was skipped for ordinary URLs, bypassing auth (GHSA-84w6-xrf3-f8q8).
+function prefixToRegExpSource (prefix) {
+  let result = ''
+  let i = 0
+
+  while (i < prefix.length) {
+    const char = prefix[i]
+
+    if (char === ':') {
+      // `::` is an escaped literal colon in find-my-way.
+      if (prefix[i + 1] === ':') {
+        result += ':'
+        i += 2
+        continue
+      }
+
+      // Find the end of the parameter name: `/`, `-`, `.`, `(` or end of string.
+      let j = i + 1
+      while (j < prefix.length && prefix[j] !== '/' && prefix[j] !== '-' && prefix[j] !== '.' && prefix[j] !== '(') {
+        j++
+      }
+
+      // Custom-regex parameter, e.g. `:id(\d+)`.
+      if (prefix[j] === '(') {
+        let depth = 0
+        let k = j
+        for (; k < prefix.length; k++) {
+          const nested = prefix[k]
+          if (nested === '(') depth++
+          else if (nested === ')') {
+            depth--
+            if (depth === 0) {
+              k++
+              break
+            }
+          }
+        }
+        const regexBody = prefix.slice(j + 1, k - 1)
+        result += '(?:' + regexBody + ')'
+        i = k
+        continue
+      }
+
+      // A conservative fragment for a Fastify path segment parameter.
+      // find-my-way allows empty parameters and does not let a parameter span a
+      // literal `/` (unless the user supplied a custom regex). Matching more
+      // rather than fewer keeps authentication/authorization middleware fail-closed.
+      result += '[^/]*'
+      i = j
+      continue
+    }
+
+    result += char.replace(ESCAPE_REGEXP, '\\$&')
+    i++
+  }
+
+  return result
+}
+
 function prefixRegExp (re, prefix) {
-  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const escapedPrefix = prefixToRegExpSource(prefix)
   const inner = re.source.replace(/(?:^|(?<=\|))\^/g, '')
   const hasAnchor = inner !== re.source
   const source = hasAnchor
