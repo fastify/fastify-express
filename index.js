@@ -43,6 +43,13 @@ function fastifyExpress (fastify, options, next) {
   }
 
   function enhanceRequest (req, reply, next) {
+    if (req.raw.isLightMyRequest) {
+      Object.assign(req.raw, Object.getPrototypeOf(req.raw))
+    }
+    if (reply.raw.isLightMyRequest) {
+      Object.assign(reply.raw, Object.getPrototypeOf(reply.raw))
+    }
+
     // Allow attaching custom Proxy handlers to Express req
     if (typeof createProxyHandler === 'function') {
       req.raw = new Proxy(req.raw, createProxyHandler(req))
@@ -101,7 +108,7 @@ function fastifyExpress (fastify, options, next) {
 
     // ** Response **
     Object.defineProperty(reply.raw, 'headersSent', {
-      get () { return replySent },
+      get () { return replySent || Boolean(this._header) },
       configurable: true
     })
 

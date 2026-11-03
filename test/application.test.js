@@ -145,3 +145,64 @@ test('Should flush headers if express handles request', async t => {
   const result = await fetch(address)
   t.assert.deepStrictEqual(result.headers.get('foo'), 'bar')
 })
+
+test('Should work with fastify.inject and Express Router', async t => {
+  t.plan(3)
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addHook('onRequest', (_, reply, done) => {
+    reply.header('foo', 'bar')
+    done()
+  })
+
+  const router = Express.Router()
+
+  router.get('/test', (_req, res) => {
+    res.status(201)
+    res.json({ hello: 'world' })
+  })
+
+  await fastify.register(expressPlugin)
+  fastify.use(router)
+
+  const response = await fastify.inject({
+    method: 'GET',
+    url: '/test'
+  })
+
+  t.assert.deepStrictEqual(response.statusCode, 201)
+  t.assert.deepStrictEqual(response.headers.foo, 'bar')
+  t.assert.deepStrictEqual(response.json(), { hello: 'world' })
+})
+
+test('Should work with fastify.inject and Express application', async t => {
+  t.plan(4)
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  const express = Express()
+
+  express.use(function (_req, res, next) {
+    t.assert.strictEqual(res.headersSent, false)
+    res.setHeader('x-custom', true)
+    next()
+  })
+
+  express.get('/hello', (_req, res) => {
+    res.status(201)
+    res.json({ hello: 'world' })
+  })
+
+  await fastify.register(expressPlugin)
+  fastify.use(express)
+
+  const response = await fastify.inject({
+    method: 'GET',
+    url: '/hello'
+  })
+
+  t.assert.deepStrictEqual(response.statusCode, 201)
+  t.assert.deepStrictEqual(response.headers['x-custom'], 'true')
+  t.assert.deepStrictEqual(response.json(), { hello: 'world' })
+})
