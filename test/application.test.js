@@ -177,13 +177,14 @@ test('Should work with fastify.inject and Express Router', async t => {
 })
 
 test('Should work with fastify.inject and Express application', async t => {
-  t.plan(3)
+  t.plan(4)
   const fastify = Fastify()
   t.after(() => fastify.close())
 
   const express = Express()
 
   express.use(function (_req, res, next) {
+    t.assert.strictEqual(res.headersSent, false)
     res.setHeader('x-custom', true)
     next()
   })

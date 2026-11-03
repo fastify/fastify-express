@@ -108,7 +108,7 @@ function fastifyExpress (fastify, options, next) {
 
     // ** Response **
     Object.defineProperty(reply.raw, 'headersSent', {
-      get () { return replySent },
+      get () { return replySent || Boolean(this._header) },
       configurable: true
     })
 
