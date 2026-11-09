@@ -114,7 +114,10 @@ function fastifyExpress (fastify, options, next) {
   }
 
   function runConnect (req, reply, next) {
-    if (hasBlankRouteParam(req.params) && hasAmbiguousDynamicMount(this[kDynamicMountMatchers], req.raw)) {
+    // An empty segment can match a Fastify route while the Express mount on the
+    // same dynamic pattern is skipped, bypassing its middleware. Reject such
+    // ambiguous requests, even when no route matches (so the reason stays 400).
+    if (hasAmbiguousDynamicMount(this[kDynamicMountMatchers], req.raw)) {
       const error = new Error('Invalid route parameter')
       error.statusCode = 400
       next(error)
@@ -201,12 +204,6 @@ function compileTokens (tokens) {
   }
 
   return { source, dynamic }
-}
-
-function hasBlankRouteParam (params) {
-  return params != null && Object.values(params).some(value => {
-    return typeof value === 'string' && value.trim().length === 0
-  })
 }
 
 function hasAmbiguousDynamicMount (matchers, rawRequest) {
