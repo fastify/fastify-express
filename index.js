@@ -161,10 +161,12 @@ function compileDynamicMountMatchers (path) {
       continue
     }
 
-    const compiled = compileTokens(parse(mountPath).tokens)
+    // Express strips trailing slashes from string mounts before matching.
+    const loosened = mountPath === '/' ? mountPath : mountPath.replace(/\/+$/, '')
+    const compiled = compileTokens(parse(loosened).tokens)
     if (compiled.dynamic) {
       matchers.push({
-        express: pathToRegexp(mountPath, { end: false }).regexp,
+        express: pathToRegexp(loosened, { end: false }).regexp,
         permissive: new RegExp(`^(?:${compiled.source})(?:\\/$)?(?=\\/|$)`, 'i')
       })
     }
