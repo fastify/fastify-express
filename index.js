@@ -179,14 +179,19 @@ function compileTokens (tokens) {
   let source = ''
   let dynamic = false
 
-  for (const token of tokens) {
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]
     if (token.type === 'text') {
       source += token.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    } else if (token.type === 'param') {
-      source += '[^/]*'
-      dynamic = true
-    } else if (token.type === 'wildcard') {
-      source += '.*'
+    } else if (token.type === 'param' || token.type === 'wildcard') {
+      // Exclude the following literal's delimiter so adjacent parameters in a
+      // single segment cannot overlap and cause catastrophic backtracking.
+      const next = tokens[i + 1]
+      const delimiter = next && next.type === 'text' ? next.value[0] : ''
+      const excluded = delimiter && delimiter !== '/' ? delimiter.replace(/[-\]\\^]/g, '\\$&') : ''
+      source += token.type === 'wildcard'
+        ? (excluded ? `[^${excluded}]*` : '.*')
+        : `[^${excluded}/]*`
       dynamic = true
     } else if (token.type === 'group') {
       const group = compileTokens(token.tokens)
