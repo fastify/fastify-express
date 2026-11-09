@@ -160,6 +160,16 @@ function compileDynamicMountMatchers (path) {
   const matchers = []
 
   for (const mountPath of paths) {
+    if (mountPath instanceof RegExp) {
+      // A RegExp mount cannot be modelled as a string, so keep the pattern and
+      // detect ambiguity by filling empty segments (see hasAmbiguousDynamicMount).
+      matchers.push({
+        express: new RegExp(mountPath.source, mountPath.flags.replace(/[gy]/g, '')),
+        permissive: null
+      })
+      continue
+    }
+
     if (typeof mountPath !== 'string') {
       continue
     }
@@ -209,8 +219,20 @@ function compileTokens (tokens) {
 function hasAmbiguousDynamicMount (matchers, rawRequest) {
   const path = parseUrl(rawRequest).pathname
   return matchers.some(matcher => {
+    if (matcher.permissive === null) {
+      // RegExp mount: ambiguous when the pattern misses only because a segment
+      // is empty, i.e. it matches once the empty segments are filled.
+      return !matcher.express.test(path) && matcher.express.test(fillEmptySegments(path))
+    }
     return !matcher.express.test(path) && matcher.permissive.test(path)
   })
+}
+
+function fillEmptySegments (path) {
+  return path
+    .split('/')
+    .map((segment, index) => index > 0 && segment.trim().length === 0 ? 'a' : segment)
+    .join('/')
 }
 
 function normalizeUrl (url, options) {
