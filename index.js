@@ -13,6 +13,7 @@ function fastifyExpress (fastify, options, next) {
   const routerOptions = fastify.initialConfig.routerOptions || {}
   const ignoreDuplicateSlashes = routerOptions.ignoreDuplicateSlashes ?? fastify.initialConfig.ignoreDuplicateSlashes
   const useSemicolonDelimiter = routerOptions.useSemicolonDelimiter ?? fastify.initialConfig.useSemicolonDelimiter
+  const caseSensitive = routerOptions.caseSensitive ?? fastify.initialConfig.caseSensitive
 
   fastify.decorate('use', use)
   fastify[kMiddlewares] = []
@@ -53,7 +54,8 @@ function fastifyExpress (fastify, options, next) {
 
     const normalizedUrl = normalizeUrl(url, {
       ignoreDuplicateSlashes,
-      useSemicolonDelimiter
+      useSemicolonDelimiter,
+      caseSensitive
     })
 
     if (normalizedUrl === null) {
@@ -141,7 +143,8 @@ function fastifyExpress (fastify, options, next) {
 function normalizeUrl (url, options) {
   const {
     ignoreDuplicateSlashes,
-    useSemicolonDelimiter
+    useSemicolonDelimiter,
+    caseSensitive
   } = options
 
   // Match find-my-way's absolute-form handling before normalizing the path.
@@ -158,7 +161,11 @@ function normalizeUrl (url, options) {
   }
 
   const { path, query } = splitPathAndQuery(decodedUrl, useSemicolonDelimiter)
-  const normalizedPath = ignoreDuplicateSlashes ? removeDuplicateSlashes(path) : path
+  let normalizedPath = ignoreDuplicateSlashes ? removeDuplicateSlashes(path) : path
+  if (caseSensitive === false) {
+    // Match find-my-way's case folding before Express checks path-scoped middleware.
+    normalizedPath = normalizedPath.toLowerCase()
+  }
 
   return normalizedPath + query
 }

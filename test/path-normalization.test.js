@@ -96,3 +96,80 @@ test('useSemicolonDelimiter does not bypass path-scoped middleware', async t => 
 
   t.assert.deepStrictEqual(middlewareCalls, 4)
 })
+
+test('case-insensitive routing does not bypass path-scoped middleware', async t => {
+  const instance = fastify({ routerOptions: { caseSensitive: false } })
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalls = 0
+  let handlerCalls = 0
+  function requireToken (req, res, next) {
+    middlewareCalls++
+    if (req.headers.authorization === 'Bearer admin-secret-token') return next()
+    res.statusCode = 401
+    res.end('blocked')
+  }
+
+  instance.use('/api/keys', requireToken)
+  instance.get('/api/keys', async req => {
+    handlerCalls++
+    return { url: req.raw.url, originalUrl: req.raw.originalUrl }
+  })
+  instance.use('/kiosk', requireToken)
+  instance.get('/kiosk/config', async () => {
+    handlerCalls++
+    return { secret: 'classified' }
+  })
+
+  const address = await instance.listen({ port: 0 })
+  for (const path of [
+    '/api/keys',
+    '/API/KEYS',
+    '/api/%E2%84%AAeys',
+    '/api/%E2%84%AAeys?Key=%E2%84%AA',
+    '/kiosk/config',
+    '/%E2%84%AAiosk/config'
+  ]) {
+    const response = await fetch(address + path)
+    t.assert.strictEqual(response.status, 401, path)
+    t.assert.strictEqual(await response.text(), 'blocked', path)
+  }
+  t.assert.strictEqual(middlewareCalls, 6)
+  t.assert.strictEqual(handlerCalls, 0)
+
+  const response = await fetch(address + '/api/%E2%84%AAeys?Key=%E2%84%AA', {
+    headers: { authorization: 'Bearer admin-secret-token' }
+  })
+  t.assert.strictEqual(response.status, 200)
+  t.assert.deepStrictEqual(await response.json(), {
+    url: '/api/keys?Key=K',
+    originalUrl: '/api/%E2%84%AAeys?Key=%E2%84%AA'
+  })
+  t.assert.strictEqual(middlewareCalls, 7)
+  t.assert.strictEqual(handlerCalls, 1)
+})
+
+test('case-sensitive routing does not fold the Kelvin sign', async t => {
+  const instance = fastify({ routerOptions: { caseSensitive: true } })
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalls = 0
+  instance.use('/api/keys', (req, res) => {
+    middlewareCalls++
+    res.statusCode = 401
+    res.end('blocked')
+  })
+  instance.get('/api/keys', async () => ({ secret: 'classified' }))
+
+  const address = await instance.listen({ port: 0 })
+  const normal = await fetch(address + '/api/keys')
+  t.assert.strictEqual(normal.status, 401)
+
+  const kelvin = await fetch(address + '/api/%E2%84%AAeys')
+  t.assert.strictEqual(kelvin.status, 404)
+  t.assert.strictEqual(middlewareCalls, 1)
+})
