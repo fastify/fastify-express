@@ -262,8 +262,10 @@ function prefixMountPath (p, prefix) {
 }
 
 function prefixRegExp (re, prefix) {
-  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const inner = re.source.replace(/(?:^|(?<=\|))\^/g, '')
+  // '/api/' + /\/secret/ must match '/api/secret', as for string mount paths
+  const base = prefix.endsWith('/') && inner.startsWith('\\/') ? prefix.slice(0, -1) : prefix
+  const escapedPrefix = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const hasAnchor = inner !== re.source
   const source = hasAnchor
     ? '^' + escapedPrefix + '(?:' + inner + ')'

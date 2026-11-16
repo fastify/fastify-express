@@ -909,3 +909,32 @@ test('the two spellings cancel correctly and still block the request', async t =
   t.assert.deepStrictEqual(result.status, 401)
   t.assert.equal(middlewareCalls, 1)
 })
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-r342-v25c-43wv
+test('regex mount paths are not skipped when the prefix ends with a slash', async t => {
+  t.plan(2)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalls = 0
+
+  await instance.register(async function (scope) {
+    scope.use(/\/private/, function (_req, res) {
+      middlewareCalls++
+      res.statusCode = 401
+      res.end('BLOCKED')
+    })
+    scope.get('/private/data', async () => {
+      return { leaked: 'CANARY' }
+    })
+  }, { prefix: '/api/' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const result = await fetch(address + '/api/private/data')
+  t.assert.deepStrictEqual(result.status, 401)
+  t.assert.equal(middlewareCalls, 1)
+})
