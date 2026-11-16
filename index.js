@@ -27,7 +27,7 @@ function fastifyExpress (fastify, options, next) {
   function use (path, fn) {
     const prefix = this.prefix
     if (typeof path === 'string') {
-      path = prefix + (path === '/' && prefix.length > 0 ? '' : path)
+      path = joinPrefix(prefix, path)
     } else if (Array.isArray(path) && path.length > 0 && typeof path[0] !== 'function') {
       path = path.map(p => prefixMountPath(p, prefix))
     } else if (path instanceof RegExp && prefix.length > 0) {
@@ -232,9 +232,27 @@ function removeDuplicateSlashes (path) {
   return path.replace(/\/{2,}/g, '/')
 }
 
+function joinPrefix (prefix, path) {
+  // Match Fastify's own route-prefix join so the Express mount path always
+  // lines up with the path find-my-way serves. Both `prefix` and `path` may
+  // or may not carry a leading/trailing slash; naively concatenating them
+  // yields a mount path that can never match (e.g. `/api//secret` from
+  // `/api/` + `/secret`, or `/apisecret` from `/api` + `secret`), letting
+  // auth middlewares be silently skipped.
+  if ((path === '/' && prefix.length > 0) || (path[0] === '/' && prefix.endsWith('/'))) {
+    // The prefix already supplies the separator; drop the path's leading slash.
+    path = path.slice(1)
+  } else if (path[0] !== '/' && !prefix.endsWith('/')) {
+    // A mount path with no leading slash would otherwise glue onto the prefix
+    // (`/api` + `secret` => `/apisecret`) or never match a slash-led route.
+    path = '/' + path
+  }
+  return prefix + path
+}
+
 function prefixMountPath (p, prefix) {
   if (typeof p === 'string') {
-    return prefix + (p === '/' && prefix.length > 0 ? '' : p)
+    return joinPrefix(prefix, p)
   }
   if (p instanceof RegExp && prefix.length > 0) {
     return prefixRegExp(p, prefix)

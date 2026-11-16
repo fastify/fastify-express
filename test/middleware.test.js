@@ -793,3 +793,119 @@ async function checkEncodedPath (routeUrl, requestUrl, t) {
   t.assert.ok(response.ok)
   t.assert.deepStrictEqual(body, { slashed: true })
 }
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-f44m-4qwg-5587
+test('path-scoped middleware is not skipped when the plugin prefix ends with a slash', async t => {
+  t.plan(2)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalls = 0
+
+  await instance.register(async function (scope) {
+    scope.use('/secret', function (_req, res) {
+      middlewareCalls++
+      res.statusCode = 401
+      res.end('BLOCKED')
+    })
+    scope.get('/secret/data', async () => {
+      return { leaked: 'CANARY' }
+    })
+  }, { prefix: '/api/' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const result = await fetch(address + '/api/secret/data')
+  t.assert.deepStrictEqual(result.status, 401)
+  t.assert.equal(middlewareCalls, 1)
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-f44m-4qwg-5587
+test('path-scoped middleware is not skipped when the mount path omits its leading slash', async t => {
+  t.plan(2)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalls = 0
+
+  await instance.register(async function (scope) {
+    scope.use('secret', function (_req, res) {
+      middlewareCalls++
+      res.statusCode = 401
+      res.end('BLOCKED')
+    })
+    scope.get('/secret/data', async () => {
+      return { leaked: 'CANARY' }
+    })
+  }, { prefix: '/api' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const result = await fetch(address + '/api/secret/data')
+  t.assert.deepStrictEqual(result.status, 401)
+  t.assert.equal(middlewareCalls, 1)
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-f44m-4qwg-5587
+test('array path-scoped middleware is not skipped when the prefix ends with a slash', async t => {
+  t.plan(2)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalls = 0
+
+  await instance.register(async function (scope) {
+    scope.use(['/secret', '/private'], function (_req, res) {
+      middlewareCalls++
+      res.statusCode = 401
+      res.end('BLOCKED')
+    })
+    scope.get('/secret/data', async () => {
+      return { leaked: 'CANARY' }
+    })
+  }, { prefix: '/api/' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const result = await fetch(address + '/api/secret/data')
+  t.assert.deepStrictEqual(result.status, 401)
+  t.assert.equal(middlewareCalls, 1)
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-f44m-4qwg-5587
+test('the two spellings cancel correctly and still block the request', async t => {
+  t.plan(2)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalls = 0
+
+  await instance.register(async function (scope) {
+    scope.use('secret', function (_req, res) {
+      middlewareCalls++
+      res.statusCode = 401
+      res.end('BLOCKED')
+    })
+    scope.get('/secret/data', async () => {
+      return { leaked: 'CANARY' }
+    })
+  }, { prefix: '/api/' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const result = await fetch(address + '/api/secret/data')
+  t.assert.deepStrictEqual(result.status, 401)
+  t.assert.equal(middlewareCalls, 1)
+})
