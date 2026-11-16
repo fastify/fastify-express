@@ -211,6 +211,14 @@ async function subsystem (fastify, opts) {
 > groups (e.g., `/(?:^\/a|^\/b)/`) are not rewritten correctly. Use array paths
 > instead: `fastify.use(['/a', '/b'], middleware)`.
 
+> **Note:** With case-insensitive routing (`routerOptions.caseSensitive: false`),
+> the request path is lowercased before Express matches path-scoped middleware,
+> to mirror the router. Two consequences: middleware and handlers see the
+> lowercased `req.raw.url` (the original is kept on `req.raw.originalUrl`), so
+> avoid relying on case-sensitive path data in this mode, for example
+> `serveStatic` on a case-sensitive filesystem; and a `RegExp` mount path must be
+> written in lowercase, since an uppercase pattern will not match the folded path.
+
 ### Wrap Express req in Proxy
 
 It is possible to wrap the Express request object in a Proxy by passing `createProxyHandler` function to generate the Proxy handler. The function will receive the Fastify request object as the first parameter.
