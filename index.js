@@ -45,7 +45,13 @@ function fastifyExpress (fastify, options, next) {
   function enhanceRequest (req, reply, next) {
     // Allow attaching custom Proxy handlers to Express req
     if (typeof createProxyHandler === 'function') {
-      req.raw = new Proxy(req.raw, createProxyHandler(req))
+      const rawRequest = req.raw
+      req.raw = new Proxy(rawRequest, createProxyHandler(req))
+      // Express sets `res.req` to the Proxy, but Node.js expects the request
+      // it created there when the response finishes
+      reply.raw.prependOnceListener('finish', () => {
+        reply.raw.req = rawRequest
+      })
     }
 
     const { url } = req.raw
