@@ -988,6 +988,44 @@ test('reject blank wildcards followed by a literal suffix in dynamic middleware 
   t.assert.deepStrictEqual(middlewareCalls, [])
 })
 
+test('static routes next to dynamic middleware mounts are not rejected', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalls = 0
+  function block (_req, res) {
+    middlewareCalls++
+    res.statusCode = 403
+    res.end('blocked')
+  }
+
+  // None of these mounts covers the static route next to it, in Express or here.
+  instance.use('/users/:id', block)
+  instance.use('/:lang/docs', block)
+  instance.use(/^\/admin\/.+/, block)
+  instance.use('/files/*path', block)
+  instance.get('/users/', async () => ({ list: true }))
+  instance.get('/', async () => ({ home: true }))
+  instance.get('/admin/', async () => ({ index: true }))
+  instance.get('/files/', async () => ({ listing: true }))
+
+  await instance.register(async function (users) {
+    users.use('/:id', block)
+    users.get('/', async () => ({ list: true }))
+  }, { prefix: '/members' })
+
+  for (const path of ['/users/', '/', '/admin/', '/files/', '/members', '/members/']) {
+    const response = await instance.inject(path)
+    t.assert.deepStrictEqual(response.statusCode, 200, path)
+  }
+  t.assert.deepStrictEqual(middlewareCalls, 0)
+
+  // Unmatched requests are plain 404s.
+  t.assert.deepStrictEqual((await instance.inject('/missing/')).statusCode, 404)
+})
+
 async function checkEncodedPath (routeUrl, requestUrl, t) {
   t.plan(6)
 

@@ -116,8 +116,10 @@ function fastifyExpress (fastify, options, next) {
   function runConnect (req, reply, next) {
     // An empty segment can match a Fastify route while the Express mount on the
     // same dynamic pattern is skipped, bypassing its middleware. Reject such
-    // ambiguous requests, even when no route matches (so the reason stays 400).
-    if (hasAmbiguousDynamicMount(this[kDynamicMountMatchers], req.raw)) {
+    // ambiguous requests. Only a route with parameters or a wildcard can take
+    // the empty segment: a static route (e.g. `/users/` next to a
+    // `/users/:id` mount) is not covered by the mount, as in Express.
+    if (isDynamicRoute(req.routeOptions.url) && hasAmbiguousDynamicMount(this[kDynamicMountMatchers], req.raw)) {
       const error = new Error('Invalid route parameter')
       error.statusCode = 400
       next(error)
@@ -214,6 +216,10 @@ function compileTokens (tokens) {
   }
 
   return { source, dynamic }
+}
+
+function isDynamicRoute (url) {
+  return url !== undefined && /[:*]/.test(url)
 }
 
 function hasAmbiguousDynamicMount (matchers, rawRequest) {
