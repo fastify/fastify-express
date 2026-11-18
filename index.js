@@ -25,12 +25,15 @@ function fastifyExpress (fastify, options, next) {
     .addHook('onRegister', onRegister)
 
   function use (path, fn) {
-    const prefix = this.prefix
+    // With ignoreDuplicateSlashes the router collapses repeated slashes in the
+    // routes it registers and in the request URL (see normalizeUrl), so mount
+    // paths must be collapsed too or they can never match.
+    const prefix = ignoreDuplicateSlashes ? removeDuplicateSlashes(this.prefix) : this.prefix
     if (typeof path === 'string') {
-      path = prefix + (path === '/' && prefix.length > 0 ? '' : path)
+      path = prefixMountPath(path, prefix, ignoreDuplicateSlashes)
     } else if (Array.isArray(path) && path.length > 0 && typeof path[0] !== 'function') {
-      path = path.map(p => prefixMountPath(p, prefix))
-    } else if (path instanceof RegExp && prefix.length > 0) {
+      path = path.map(p => prefixMountPath(p, prefix, ignoreDuplicateSlashes))
+    } else if (path instanceof RegExp) {
       path = prefixRegExp(path, prefix)
     }
     this[kMiddlewares].push([path, fn])
@@ -232,11 +235,30 @@ function removeDuplicateSlashes (path) {
   return path.replace(/\/{2,}/g, '/')
 }
 
-function prefixMountPath (p, prefix) {
-  if (typeof p === 'string') {
-    return prefix + (p === '/' && prefix.length > 0 ? '' : p)
+function joinPrefix (prefix, path) {
+  // Match Fastify's own route-prefix join so the Express mount path always
+  // lines up with the path find-my-way serves. Both `prefix` and `path` may
+  // or may not carry a leading/trailing slash; naively concatenating them
+  // yields a mount path that can never match (e.g. `/api//secret` from
+  // `/api/` + `/secret`, or `/apisecret` from `/api` + `secret`), letting
+  // auth middlewares be silently skipped.
+  if ((path === '/' && prefix.length > 0) || (path[0] === '/' && prefix.endsWith('/'))) {
+    // The prefix already supplies the separator; drop the path's leading slash.
+    path = path.slice(1)
+  } else if (path[0] !== '/' && !prefix.endsWith('/')) {
+    // A mount path with no leading slash would otherwise glue onto the prefix
+    // (`/api` + `secret` => `/apisecret`) or never match a slash-led route.
+    path = '/' + path
   }
-  if (p instanceof RegExp && prefix.length > 0) {
+  return prefix + path
+}
+
+function prefixMountPath (p, prefix, ignoreDuplicateSlashes) {
+  if (typeof p === 'string') {
+    const joined = joinPrefix(prefix, p)
+    return ignoreDuplicateSlashes ? removeDuplicateSlashes(joined) : joined
+  }
+  if (p instanceof RegExp) {
     return prefixRegExp(p, prefix)
   }
   /* c8 ignore next */
@@ -286,7 +308,11 @@ function prefixToRegExpSource (prefix) {
             }
           }
         }
-        const regexBody = prefix.slice(j + 1, k - 1)
+        let regexBody = prefix.slice(j + 1, k - 1)
+        // find-my-way drops a leading `^` and trailing `$` from the parameter
+        // regex, which would otherwise never match inside a longer path.
+        if (regexBody[0] === '^') regexBody = regexBody.slice(1)
+        if (regexBody.endsWith('$')) regexBody = regexBody.slice(0, -1)
         result += '(?:' + regexBody + ')'
         i = k
         continue
@@ -309,13 +335,83 @@ function prefixToRegExpSource (prefix) {
 }
 
 function prefixRegExp (re, prefix) {
-  const escapedPrefix = prefixToRegExpSource(prefix)
-  const inner = re.source.replace(/(?:^|(?<=\|))\^/g, '')
-  const hasAnchor = inner !== re.source
-  const source = hasAnchor
-    ? '^' + escapedPrefix + '(?:' + inner + ')'
-    : escapedPrefix + '(?:' + re.source + ')'
-  return new RegExp(source, re.flags)
+  // Express calls exec() on the mount RegExp directly. With `g` or `y` the
+  // match state carries over in lastIndex, so every other request would skip
+  // the middleware.
+  const flags = re.flags.replace(/[gy]/g, '')
+  if (prefix.length === 0) {
+    return flags === re.flags ? re : new RegExp(re.source, flags)
+  }
+
+  // Join the prefix to the pattern with an optional single slash, so there is
+  // exactly one slash at the boundary whether or not the prefix ends with one
+  // and whether or not the pattern (or one of its alternatives) starts with
+  // one, however that slash is spelled (`\/`, `[/]`, `\x2f`, inside a group).
+  const mountPrefix = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix
+  const boundary = prefixToRegExpSource(mountPrefix) + '\\/?'
+
+  // Every route of a prefixed plugin starts with the prefix, so the pattern is
+  // matched against the rest of the path, as Express does for a mounted
+  // router: `^` in the original pattern now means the end of the prefix, and
+  // an unanchored alternative may match anywhere after it. A `^` leading a
+  // top-level alternative anchors that alternative; any other `^` (e.g. inside
+  // a group) becomes a lookbehind for the same position.
+  const alternatives = rewriteAnchors(re.source, flags.includes('v'), '(?<=^' + boundary + ')')
+  const source = '^' + boundary + '(?:' + alternatives
+    .map(a => a.anchored ? a.source : '[\\s\\S]*?(?:' + a.source + ')')
+    .join('|') + ')'
+  return new RegExp(source, flags)
+}
+
+// Split a RegExp source into its top-level alternatives, stripping the `^`
+// that leads an alternative (reported as `anchored`) and replacing every other
+// `^` assertion with `anchor`. Escapes and character classes are skipped, so
+// `\^`, `[^/]` and `[|]` are left alone.
+function rewriteAnchors (source, unicodeSets, anchor) {
+  const alternatives = []
+  let current = { source: '', anchored: false }
+  let depth = 0
+  let classDepth = 0
+
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i]
+
+    if (char === '\\') {
+      current.source += char + source[i + 1]
+      i++
+    } else if (classDepth > 0) {
+      // With the `v` flag, classes nest (`[[a-z]--[aeiou]]`).
+      if (char === '[' && unicodeSets) {
+        classDepth++
+      } else if (char === ']') {
+        classDepth--
+      }
+      current.source += char
+    } else if (char === '[') {
+      classDepth = 1
+      current.source += char
+    } else if (char === '(') {
+      depth++
+      current.source += char
+    } else if (char === ')') {
+      depth--
+      current.source += char
+    } else if (char === '|' && depth === 0) {
+      alternatives.push(current)
+      current = { source: '', anchored: false }
+    } else if (char === '^') {
+      if (depth === 0 && current.source === '' && !current.anchored) {
+        current.anchored = true
+      } else {
+        current.source += anchor
+      }
+    } else {
+      current.source += char
+    }
+  }
+
+  alternatives.push(current)
+  return alternatives
 }
 
 module.exports = fp(fastifyExpress, {
