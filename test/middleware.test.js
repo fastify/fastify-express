@@ -526,35 +526,36 @@ test('mixed array of strings and regexes is rewritten with prefix', async t => {
   t.assert.deepStrictEqual(await privateWithAuth.json(), { secret: 'admin-data' })
 })
 
-test('regex with grouped anchors does not match in prefixed plugins (known limitation)', async t => {
-  t.plan(1)
-
+test('regex with grouped anchors is rewritten with prefix', async t => {
   const instance = fastify()
   t.after(() => instance.close())
 
   await instance.register(expressPlugin)
 
-  let middlewareCalled = false
+  const middlewareCalls = []
 
   await instance.register(async function (child) {
-    // (?:^\/private|^\/settings) -- the ^ inside the group is not stripped
-    // by prefixRegExp, so the rewritten regex still anchors to position 0
-    // of the full URL and fails to match /admin/private
-    child.use(/(?:^\/private|^\/settings)/, function (_req, _res, next) {
-      middlewareCalled = true
-      next()
+    child.use(/(?:^\/private|^\/settings)/, function (req, res) {
+      middlewareCalls.push(req.originalUrl)
+      res.statusCode = 403
+      res.end('blocked by middleware')
     })
 
-    child.get('/private', async () => {
-      return { ok: true }
-    })
+    child.get('/private', async () => ({ ok: true }))
+    child.get('/settings', async () => ({ ok: true }))
+    child.get('/public', async () => ({ ok: true }))
+    child.get('/nested/private', async () => ({ ok: true }))
   }, { prefix: '/admin' })
 
-  const address = await instance.listen({ port: 0 })
+  t.assert.deepStrictEqual((await instance.inject('/admin/private')).statusCode, 403)
+  t.assert.deepStrictEqual((await instance.inject('/admin/settings')).statusCode, 403)
+  t.assert.deepStrictEqual(middlewareCalls, ['/admin/private', '/admin/settings'])
 
-  await fetch(address + '/admin/private')
-  // Middleware is NOT called -- this is expected behavior, not a bug
-  t.assert.ok(!middlewareCalled)
+  // The grouped anchors still pin the match to the start of the plugin path.
+  middlewareCalls.length = 0
+  t.assert.deepStrictEqual((await instance.inject('/admin/public')).statusCode, 200)
+  t.assert.deepStrictEqual((await instance.inject('/admin/nested/private')).statusCode, 200)
+  t.assert.deepStrictEqual(middlewareCalls, [])
 })
 
 test('res.end should block middleware execution', async t => {
@@ -937,4 +938,189 @@ test('regex mount paths are not skipped when the prefix ends with a slash', asyn
   const result = await fetch(address + '/api/private/data')
   t.assert.deepStrictEqual(result.status, 401)
   t.assert.equal(middlewareCalls, 1)
+})
+
+test('regex mount paths match however the prefix boundary slash is spelled', async t => {
+  const mounts = [
+    [/^\/private/, '/private/data'],
+    [/[/]private/, '/private/data'],
+    [/\x2fprivate/, '/private/data'],
+    [/(?:\/private)/, '/private/data'],
+    [/^\/private|^settings/, '/private/data'],
+    [/^\/private|^settings/, '/settings'],
+    [/private/, '/private/data'],
+    [/(?:^\/private)/, '/private/data'],
+    [/^\/admin|private/, '/nested/private']
+  ]
+
+  for (const prefix of ['/api', '/api/']) {
+    for (const [mount, route] of mounts) {
+      const label = `prefix=${prefix} use(${mount}) GET ${route}`
+      const instance = fastify()
+      t.after(() => instance.close())
+      await instance.register(expressPlugin)
+
+      let middlewareCalls = 0
+      await instance.register(async function (scope) {
+        scope.use(mount, function (_req, res) {
+          middlewareCalls++
+          res.statusCode = 401
+          res.end('blocked')
+        })
+        scope.get(route, async () => ({ leaked: true }))
+        scope.get('/public', async () => ({ ok: true }))
+      }, { prefix })
+
+      const blocked = await instance.inject('/api' + route)
+      t.assert.deepStrictEqual(blocked.statusCode, 401, label)
+      t.assert.deepStrictEqual(middlewareCalls, 1, label)
+
+      const open = await instance.inject('/api/public')
+      t.assert.deepStrictEqual(open.statusCode, 200, label)
+    }
+  }
+})
+
+test('escapes and character classes in regex mount paths are not rewritten', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+  await instance.register(expressPlugin)
+
+  const middlewareCalls = []
+  function block (name) {
+    return function (_req, res) {
+      middlewareCalls.push(name)
+      res.statusCode = 401
+      res.end('blocked')
+    }
+  }
+
+  await instance.register(async function (scope) {
+    // `\^` and `\|` are literals, `[^|]` is a class: none of them is an anchor
+    // or an alternation, so none of them may be rewritten.
+    scope.use(/\^caret/, block('escaped caret'))
+    scope.use(/^\/a\|b/, block('escaped pipe'))
+    scope.use(/^\/[^|]lass/, block('class'))
+    // eslint-disable-next-line prefer-regex-literals -- the parser lacks the `v` flag
+    scope.use(new RegExp('^\\/[[a-z]--[x]]ets', 'v'), block('nested class'))
+    scope.get('/^caret', async () => ({ leaked: true }))
+    scope.get('/a|b', async () => ({ leaked: true }))
+    scope.get('/class', async () => ({ leaked: true }))
+    scope.get('/sets', async () => ({ leaked: true }))
+    scope.get('/a', async () => ({ ok: true }))
+  }, { prefix: '/api' })
+
+  for (const [url, name] of [
+    ['/api/%5Ecaret', 'escaped caret'],
+    ['/api/a%7Cb', 'escaped pipe'],
+    ['/api/class', 'class'],
+    ['/api/sets', 'nested class']
+  ]) {
+    middlewareCalls.length = 0
+    const response = await instance.inject(url)
+    t.assert.deepStrictEqual(response.statusCode, 401, url)
+    t.assert.deepStrictEqual(middlewareCalls, [name], url)
+  }
+
+  middlewareCalls.length = 0
+  t.assert.deepStrictEqual((await instance.inject('/api/a')).statusCode, 200)
+  t.assert.deepStrictEqual(middlewareCalls, [])
+})
+
+test('named groups in prefixed regex mount paths keep their names', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+  await instance.register(expressPlugin)
+
+  let params
+  await instance.register(async function (scope) {
+    scope.use(/^\/user\/(?<id>\d+)/, function (req, res) {
+      params = req.params
+      res.statusCode = 401
+      res.end('blocked')
+    })
+    scope.get('/user/:id', async () => ({ leaked: true }))
+  }, { prefix: '/api' })
+
+  const response = await instance.inject('/api/user/42')
+  t.assert.deepStrictEqual(response.statusCode, 401)
+  t.assert.deepStrictEqual(params, { id: '42' })
+})
+
+test('regex mount paths at the root are matched against the full path', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+  await instance.register(expressPlugin)
+
+  instance.use(/^\/private/, function (_req, res) {
+    res.statusCode = 401
+    res.end('blocked')
+  })
+  instance.get('/private', async () => ({ leaked: true }))
+  instance.get('/public', async () => ({ ok: true }))
+
+  t.assert.deepStrictEqual((await instance.inject('/private')).statusCode, 401)
+  t.assert.deepStrictEqual((await instance.inject('/public')).statusCode, 200)
+})
+
+test('regex mount paths with the g or y flag do not skip every other request', async t => {
+  for (const [prefix, mount] of [
+    ['', /^\/private/g],
+    ['', /^\/private/y],
+    ['/api', /^\/private/g],
+    ['/api', /^\/private/y]
+  ]) {
+    const label = `prefix=${prefix} use(${mount})`
+    const instance = fastify()
+    t.after(() => instance.close())
+    await instance.register(expressPlugin)
+
+    let middlewareCalls = 0
+    await instance.register(async function (scope) {
+      scope.use(mount, function (_req, res) {
+        middlewareCalls++
+        res.statusCode = 401
+        res.end('blocked')
+      })
+      scope.get('/private', async () => ({ leaked: true }))
+    }, { prefix })
+
+    for (let i = 0; i < 4; i++) {
+      const response = await instance.inject(prefix + '/private')
+      t.assert.deepStrictEqual(response.statusCode, 401, `${label} request ${i}`)
+    }
+    t.assert.deepStrictEqual(middlewareCalls, 4, label)
+  }
+})
+
+test('mount paths are collapsed like routes when ignoreDuplicateSlashes is enabled', async t => {
+  for (const [prefix, mount] of [
+    ['/api', '//private'],
+    ['/api', ['//private']],
+    ['/api//v1', '/private'],
+    ['/api//v1', /^\/private/],
+    ['/api/', '//private']
+  ]) {
+    const label = `prefix=${prefix} use(${mount})`
+    const instance = fastify({ routerOptions: { ignoreDuplicateSlashes: true } })
+    t.after(() => instance.close())
+    await instance.register(expressPlugin)
+
+    let middlewareCalls = 0
+    await instance.register(async function (scope) {
+      scope.use(mount, function (_req, res) {
+        middlewareCalls++
+        res.statusCode = 401
+        res.end('blocked')
+      })
+      scope.get('/private/data', async () => ({ leaked: true }))
+    }, { prefix })
+
+    const url = prefix.replace(/\/+$/, '').replace(/\/{2,}/g, '/') + '/private/data'
+    for (const requestUrl of [url, url.replace(/\//g, '//')]) {
+      const response = await instance.inject(requestUrl)
+      t.assert.deepStrictEqual(response.statusCode, 401, `${label} GET ${requestUrl}`)
+    }
+    t.assert.deepStrictEqual(middlewareCalls, 2, label)
+  }
 })
