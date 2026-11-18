@@ -32,7 +32,7 @@ function fastifyExpress (fastify, options, next) {
     if (typeof path === 'string') {
       path = prefixMountPath(path, prefix, ignoreDuplicateSlashes)
     } else if (Array.isArray(path) && path.length > 0 && typeof path[0] !== 'function') {
-      path = path.map(p => prefixMountPath(p, prefix, ignoreDuplicateSlashes))
+      path = path.flatMap(p => prefixMountPath(p, prefix, ignoreDuplicateSlashes))
     } else if (path instanceof RegExp) {
       path = prefixRegExp(path, prefix)
     }
@@ -247,8 +247,10 @@ function joinPrefix (prefix, path) {
     path = path.slice(1)
   } else if (path[0] !== '/' && !prefix.endsWith('/')) {
     // A mount path with no leading slash would otherwise glue onto the prefix
-    // (`/api` + `secret` => `/apisecret`) or never match a slash-led route.
-    path = '/' + path
+    // (`/api` + `secret` => `/apisecret`) and never match a slash-led route.
+    // Fastify serves a slashless route at exactly that glued path, though, so
+    // mount both spellings.
+    return prefix.length > 0 ? [prefix + '/' + path, prefix + path] : '/' + path
   }
   return prefix + path
 }
@@ -256,7 +258,10 @@ function joinPrefix (prefix, path) {
 function prefixMountPath (p, prefix, ignoreDuplicateSlashes) {
   if (typeof p === 'string') {
     const joined = joinPrefix(prefix, p)
-    return ignoreDuplicateSlashes ? removeDuplicateSlashes(joined) : joined
+    if (!ignoreDuplicateSlashes) {
+      return joined
+    }
+    return Array.isArray(joined) ? joined.map(removeDuplicateSlashes) : removeDuplicateSlashes(joined)
   }
   if (p instanceof RegExp) {
     return prefixRegExp(p, prefix)
@@ -282,8 +287,12 @@ function prefixRegExp (re, prefix) {
   // exactly one slash at the boundary whether or not the prefix ends with one
   // and whether or not the pattern (or one of its alternatives) starts with
   // one, however that slash is spelled (`\/`, `[/]`, `\x2f`, inside a group).
+  // The slash is optional and lazy: a pattern that can match the empty string
+  // (`/^(?!\/public)/`) must stop right after the prefix, since Express skips
+  // a mount whose match ends in the middle of a path segment.
   const mountPrefix = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix
-  const boundary = escapePrefix(mountPrefix) + '\\/?'
+  const escapedPrefix = escapePrefix(mountPrefix)
+  const boundary = escapedPrefix + '\\/??'
 
   // Every route of a prefixed plugin starts with the prefix, so the pattern is
   // matched against the rest of the path, as Express does for a mounted
@@ -292,9 +301,17 @@ function prefixRegExp (re, prefix) {
   // top-level alternative anchors that alternative; any other `^` (e.g. inside
   // a group) becomes a lookbehind for the same position.
   const alternatives = rewriteAnchors(re.source, flags.includes('v'), '(?<=^' + boundary + ')')
-  const source = '^' + boundary + '(?:' + alternatives
+  let source = '^' + boundary + '(?:' + alternatives
     .map(a => a.anchored ? a.source : '[\\s\\S]*?(?:' + a.source + ')')
     .join('|') + ')'
+
+  // A route at the prefix itself (`/api` for `get('/')`) leaves nothing after
+  // the prefix, where a mounted Express router would test the pattern against
+  // '/'. Match the bare prefix when the pattern matches '/'.
+  const root = new RegExp(re.source, flags).exec('/')
+  if (root !== null && root[0].length <= 1) {
+    source = '^' + escapedPrefix + '(?=\\/?$)|' + source
+  }
   return new RegExp(source, flags)
 }
 
