@@ -34,6 +34,13 @@ function fastifyExpress (fastify, options, next) {
     } else if (path instanceof RegExp && prefix.length > 0) {
       path = prefixRegExp(path, prefix)
     }
+
+    if (caseSensitive === false) {
+      // The request path is lowercased to mirror the router (see normalizeUrl),
+      // so a RegExp mount path, and the plugin prefix rewritten into it, must
+      // match case-insensitively or it would never match an uppercase spelling.
+      path = Array.isArray(path) ? path.map(foldRegExp) : foldRegExp(path)
+    }
     this[kMiddlewares].push([path, fn])
     if (fn == null) {
       this.express.use(path)
@@ -233,6 +240,10 @@ function splitPathAndQuery (url, useSemicolonDelimiter) {
     path: url.slice(0, semicolonIndex),
     query: `?${url.slice(semicolonIndex + 1)}`
   }
+}
+
+function foldRegExp (p) {
+  return p instanceof RegExp && !p.flags.includes('i') ? new RegExp(p.source, p.flags + 'i') : p
 }
 
 function removeDuplicateSlashes (path) {

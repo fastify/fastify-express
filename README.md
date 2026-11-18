@@ -216,8 +216,8 @@ async function subsystem (fastify, opts) {
 > to mirror the router. Two consequences: middleware and handlers see the
 > lowercased `req.raw.url` (the original is kept on `req.raw.originalUrl`), so
 > avoid relying on case-sensitive path data in this mode, for example
-> `serveStatic` on a case-sensitive filesystem; and a `RegExp` mount path must be
-> written in lowercase, since an uppercase pattern will not match the folded path.
+> `serveStatic` on a case-sensitive filesystem; and `RegExp` mount paths are
+> matched case-insensitively (the `i` flag is added), as string mount paths are.
 
 ### Wrap Express req in Proxy
 

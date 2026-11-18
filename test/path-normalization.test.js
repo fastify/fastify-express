@@ -173,3 +173,41 @@ test('case-sensitive routing does not fold the Kelvin sign', async t => {
   t.assert.strictEqual(kelvin.status, 404)
   t.assert.strictEqual(middlewareCalls, 1)
 })
+
+test('case-insensitive routing does not bypass RegExp middleware with uppercase prefixes or patterns', async t => {
+  const instance = fastify({ routerOptions: { caseSensitive: false } })
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalls = 0
+  function block (_req, res) {
+    middlewareCalls++
+    res.statusCode = 401
+    res.end('blocked')
+  }
+
+  // Already case-insensitive patterns are kept as they are.
+  instance.use(/^\/root/i, block)
+  instance.get('/root', async () => ({ secret: 'classified' }))
+
+  await instance.register(async function (admin) {
+    admin.use(/^\/secret/, block)
+    admin.use([/^\/Keys/], block)
+    admin.get('/secret', async () => ({ secret: 'classified' }))
+    admin.get('/keys', async () => ({ secret: 'classified' }))
+    admin.get('/public', async () => ({ ok: true }))
+  }, { prefix: '/Admin' })
+
+  for (const path of ['/ROOT', '/admin/secret', '/ADMIN/SECRET', '/Admin/Secret', '/admin/keys', '/admin/%E2%84%AAeys']) {
+    middlewareCalls = 0
+    const response = await instance.inject(path)
+    t.assert.strictEqual(response.statusCode, 401, path)
+    t.assert.strictEqual(middlewareCalls, 1, path)
+  }
+
+  middlewareCalls = 0
+  const open = await instance.inject('/ADMIN/PUBLIC')
+  t.assert.strictEqual(open.statusCode, 200)
+  t.assert.strictEqual(middlewareCalls, 0)
+})
