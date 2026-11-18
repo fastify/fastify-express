@@ -1359,7 +1359,8 @@ test('mount paths are collapsed like routes when ignoreDuplicateSlashes is enabl
     ['/api', ['//private']],
     ['/api//v1', '/private'],
     ['/api//v1', /^\/private/],
-    ['/api/', '//private']
+    ['/api/', '//private'],
+    ['/api', 'private']
   ]) {
     const label = `prefix=${prefix} use(${mount})`
     const instance = fastify({ routerOptions: { ignoreDuplicateSlashes: true } })
@@ -1383,4 +1384,136 @@ test('mount paths are collapsed like routes when ignoreDuplicateSlashes is enabl
     }
     t.assert.deepStrictEqual(middlewareCalls, 2, label)
   }
+})
+
+test('prefixed regex mount paths that can match the empty string still run', async t => {
+  for (const mount of [/^(?!\/public)/, /^/, /(?:)/, /^(?:\/admin)?/]) {
+    const label = `use(${mount})`
+    const instance = fastify()
+    t.after(() => instance.close())
+    await instance.register(expressPlugin)
+
+    await instance.register(async function (scope) {
+      scope.use(mount, function (_req, res) {
+        res.statusCode = 401
+        res.end('blocked')
+      })
+      scope.get('/secret', async () => ({ leaked: true }))
+    }, { prefix: '/api' })
+
+    t.assert.deepStrictEqual((await instance.inject('/api/secret')).statusCode, 401, label)
+  }
+})
+
+test('prefixed regex mount paths that match the root also cover the bare prefix', async t => {
+  for (const mount of [/^\/.*/, /^\/$/, /^\/(?!public)/]) {
+    const label = `use(${mount})`
+    const instance = fastify()
+    t.after(() => instance.close())
+    await instance.register(expressPlugin)
+
+    await instance.register(async function (scope) {
+      scope.use(mount, function (_req, res) {
+        res.statusCode = 401
+        res.end('blocked')
+      })
+      scope.get('/', async () => ({ leaked: true }))
+      scope.get('/public', async () => ({ ok: true }))
+    }, { prefix: '/api' })
+
+    t.assert.deepStrictEqual((await instance.inject('/api')).statusCode, 401, `${label} GET /api`)
+    t.assert.deepStrictEqual((await instance.inject('/api/')).statusCode, 401, `${label} GET /api/`)
+  }
+
+  // A pattern that does not match the root leaves the bare prefix alone.
+  const instance = fastify()
+  t.after(() => instance.close())
+  await instance.register(expressPlugin)
+  await instance.register(async function (scope) {
+    scope.use(/^\/private/, function (_req, res) {
+      res.statusCode = 401
+      res.end('blocked')
+    })
+    scope.get('/', async () => ({ ok: true }))
+  }, { prefix: '/api' })
+  t.assert.deepStrictEqual((await instance.inject('/api')).statusCode, 200)
+})
+
+test('slashless mount paths cover both the glued and the separated route', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+  await instance.register(expressPlugin)
+
+  let middlewareCalls = 0
+  await instance.register(async function (scope) {
+    scope.use('secret', function (_req, res) {
+      middlewareCalls++
+      res.statusCode = 401
+      res.end('blocked')
+    })
+    // Fastify serves a slashless route glued to the prefix, at /apisecret.
+    scope.get('secret', async () => ({ leaked: true }))
+    scope.get('/secret/data', async () => ({ leaked: true }))
+  }, { prefix: '/api' })
+
+  t.assert.deepStrictEqual((await instance.inject('/apisecret')).statusCode, 401)
+  t.assert.deepStrictEqual((await instance.inject('/api/secret/data')).statusCode, 401)
+  t.assert.deepStrictEqual(middlewareCalls, 2)
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-84w6-xrf3-f8q8
+// Prefix segments holding a parameter match one whole segment, whatever the
+// parameter regex says, so the pattern stays valid under the `u` and `v` flags
+// and anchors inside the parameter regex cannot leak into the pattern.
+test('regex mount paths under parameterized prefixes with flags and anchored parameter regexes', async t => {
+  for (const [prefix, mount, url] of [
+    // eslint-disable-next-line prefer-regex-literals -- the parser lacks the `v` flag
+    ['/tenant/:id', new RegExp('^\\/admin', 'v'), '/tenant/t1/admin'],
+    ['/d/:date(\\d{4}\\-\\d{2})', /^\/admin/u, '/d/2024-01/admin'],
+    ['/u/:id(^\\d+$|^me$)', /^\/admin/, '/u/me/admin'],
+    ['/r/:from-:to', /^\/admin/, '/r/a-b/admin'],
+    ['/a::b/:id', /^\/admin/, '/a:b/1/admin'],
+    ['/g/:id((?:x|y)\\d+)', /^\/admin/, '/g/x1/admin']
+  ]) {
+    const label = `prefix=${prefix} use(${mount})`
+    const instance = fastify()
+    t.after(() => instance.close())
+    await instance.register(expressPlugin)
+
+    let middlewareCalls = 0
+    await instance.register(async function (scope) {
+      scope.use(mount, function (_req, res) {
+        middlewareCalls++
+        res.statusCode = 401
+        res.end('blocked')
+      })
+      scope.get('/admin', async () => ({ leaked: true }))
+      scope.get('/public', async () => ({ ok: true }))
+    }, { prefix })
+
+    t.assert.deepStrictEqual((await instance.inject(url)).statusCode, 401, label)
+    t.assert.deepStrictEqual(middlewareCalls, 1, label)
+    t.assert.deepStrictEqual((await instance.inject(url.replace(/admin$/, 'public'))).statusCode, 200, label)
+  }
+})
+
+test('regex mount paths under prefixes with many parameters in one segment do not backtrack', async t => {
+  const instance = fastify({ routerOptions: { maxParamLength: 500 } })
+  t.after(() => instance.close())
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (scope) {
+    scope.use(/^\/admin/, function (_req, res) {
+      res.statusCode = 401
+      res.end('blocked')
+    })
+    scope.get('/x', async () => ({ ok: true }))
+  }, { prefix: '/t/:a-:b-:c-:d' })
+
+  const start = process.hrtime.bigint()
+  const response = await instance.inject('/t/' + '-'.repeat(500) + '-b-c-d/x')
+  const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6
+
+  t.assert.deepStrictEqual(response.statusCode, 200)
+  t.assert.ok(elapsedMs < 1000, `matcher took ${elapsedMs.toFixed(0)}ms`)
 })
