@@ -960,6 +960,34 @@ test('does not backtrack on dynamic mounts with multiple parameters in one segme
   t.assert.ok(elapsedMs < 1000, `matcher took ${elapsedMs.toFixed(0)}ms`)
 })
 
+test('reject blank wildcards followed by a literal suffix in dynamic middleware mounts', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  const middlewareCalls = []
+  // The wildcard is followed by a non-slash literal, so the permissive matcher
+  // excludes that delimiter instead of using `.*`.
+  instance.use('/files/*splat.txt', function (_req, res) {
+    middlewareCalls.push('files')
+    res.statusCode = 403
+    res.end('blocked')
+  })
+  instance.get('/files/*', async request => request.params)
+
+  const address = await instance.listen({ port: 0 })
+
+  const nonEmpty = await fetch(address + '/files/report.txt')
+  t.assert.deepStrictEqual(nonEmpty.status, 403)
+  t.assert.deepStrictEqual(middlewareCalls, ['files'])
+
+  middlewareCalls.length = 0
+  const blank = await fetch(address + '/files/.txt')
+  t.assert.deepStrictEqual(blank.status, 400)
+  t.assert.deepStrictEqual(middlewareCalls, [])
+})
+
 async function checkEncodedPath (routeUrl, requestUrl, t) {
   t.plan(6)
 
