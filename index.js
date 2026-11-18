@@ -61,8 +61,7 @@ function fastifyExpress (fastify, options, next) {
 
     const normalizedUrl = normalizeUrl(url, {
       ignoreDuplicateSlashes,
-      useSemicolonDelimiter,
-      caseSensitive
+      useSemicolonDelimiter
     })
 
     if (normalizedUrl === null) {
@@ -72,7 +71,11 @@ function fastifyExpress (fastify, options, next) {
       return
     }
 
-    req.raw.url = normalizedUrl
+    // With case-insensitive routing, Express matches path-scoped middleware on
+    // a path folded the way find-my-way folds it. Route handlers get the
+    // original spelling back once Express is done (see runConnect).
+    req[kNormalizedUrl] = normalizedUrl
+    req.raw.url = caseSensitive === false ? foldPath(normalizedUrl) : normalizedUrl
     req.raw.id = req.id
     req.raw.hostname = req.hostname
     req.raw.ip = req.ip
@@ -123,9 +126,19 @@ function fastifyExpress (fastify, options, next) {
         reply.raw.setHeader(headerName, headerValue)
       }
 
-      this.express(req.raw, reply.raw, next)
+      this.express(req.raw, reply.raw, caseSensitive === false ? restoreUrl : next)
+    } else if (caseSensitive === false) {
+      restoreUrl()
     } else {
       next()
+    }
+
+    // Hand route handlers the URL in its original spelling (see enhanceRequest).
+    function restoreUrl (err) {
+      if (req.raw.url === foldPath(req[kNormalizedUrl])) {
+        req.raw.url = req[kNormalizedUrl]
+      }
+      next(err)
     }
   }
 
@@ -150,8 +163,7 @@ function fastifyExpress (fastify, options, next) {
 function normalizeUrl (url, options) {
   const {
     ignoreDuplicateSlashes,
-    useSemicolonDelimiter,
-    caseSensitive
+    useSemicolonDelimiter
   } = options
 
   // Match find-my-way's absolute-form handling before normalizing the path.
@@ -168,13 +180,19 @@ function normalizeUrl (url, options) {
   }
 
   const { path, query } = splitPathAndQuery(decodedUrl, useSemicolonDelimiter)
-  let normalizedPath = ignoreDuplicateSlashes ? removeDuplicateSlashes(path) : path
-  if (caseSensitive === false) {
-    // Match find-my-way's case folding before Express checks path-scoped middleware.
-    normalizedPath = normalizedPath.toLowerCase()
-  }
+  const normalizedPath = ignoreDuplicateSlashes ? removeDuplicateSlashes(path) : path
 
   return normalizedPath + query
+}
+
+const kNormalizedUrl = Symbol('fastify-express-normalized-url')
+
+// Lowercase the path, not the query, as find-my-way does with caseSensitive: false.
+function foldPath (url) {
+  const queryIndex = url.indexOf('?')
+  return queryIndex === -1
+    ? url.toLowerCase()
+    : url.slice(0, queryIndex).toLowerCase() + url.slice(queryIndex)
 }
 
 function getPathFromAbsoluteUrl (url) {

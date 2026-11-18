@@ -212,10 +212,11 @@ async function subsystem (fastify, opts) {
 > instead: `fastify.use(['/a', '/b'], middleware)`.
 
 > **Note:** With case-insensitive routing (`routerOptions.caseSensitive: false`),
-> the request path is lowercased before Express matches path-scoped middleware,
-> to mirror the router. Two consequences: middleware and handlers see the
-> lowercased `req.raw.url` (the original is kept on `req.raw.originalUrl`), so
-> avoid relying on case-sensitive path data in this mode, for example
+> the request path is lowercased while Express matches path-scoped middleware,
+> to mirror the router. Two consequences: middleware sees the lowercased path in
+> `req.url` and in Express `req.params` (the original is kept on
+> `req.originalUrl`, and route handlers see the original spelling), so avoid
+> relying on case-sensitive path data in middleware in this mode, for example
 > `serveStatic` on a case-sensitive filesystem; and `RegExp` mount paths are
 > matched case-insensitively (the `i` flag is added), as string mount paths are.
 

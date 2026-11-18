@@ -112,10 +112,14 @@ test('case-insensitive routing does not bypass path-scoped middleware', async t 
     res.end('blocked')
   }
 
-  instance.use('/api/keys', requireToken)
+  let middlewareUrl
+  instance.use('/api/keys', (req, res, next) => {
+    middlewareUrl = req.baseUrl
+    requireToken(req, res, next)
+  })
   instance.get('/api/keys', async req => {
     handlerCalls++
-    return { url: req.raw.url, originalUrl: req.raw.originalUrl }
+    return { url: req.url, rawUrl: req.raw.url, originalUrl: req.raw.originalUrl }
   })
   instance.use('/kiosk', requireToken)
   instance.get('/kiosk/config', async () => {
@@ -143,8 +147,11 @@ test('case-insensitive routing does not bypass path-scoped middleware', async t 
     headers: { authorization: 'Bearer admin-secret-token' }
   })
   t.assert.strictEqual(response.status, 200)
+  // Middleware matched on the folded path; the handler sees the original spelling.
+  t.assert.strictEqual(middlewareUrl, '/api/keys')
   t.assert.deepStrictEqual(await response.json(), {
-    url: '/api/keys?Key=K',
+    url: '/api/Keys?Key=K',
+    rawUrl: '/api/Keys?Key=K',
     originalUrl: '/api/%E2%84%AAeys?Key=%E2%84%AA'
   })
   t.assert.strictEqual(middlewareCalls, 7)
@@ -210,4 +217,40 @@ test('case-insensitive routing does not bypass RegExp middleware with uppercase 
   const open = await instance.inject('/ADMIN/PUBLIC')
   t.assert.strictEqual(open.statusCode, 200)
   t.assert.strictEqual(middlewareCalls, 0)
+})
+
+test('case-insensitive routing keeps the original URL spelling for route handlers', async t => {
+  const instance = fastify({ routerOptions: { caseSensitive: false } })
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareSeen
+  instance.use('/files', (req, _res, next) => {
+    middlewareSeen = { url: req.url, originalUrl: req.originalUrl }
+    next()
+  })
+  instance.get('/files/:name', async req => ({ url: req.url, rawUrl: req.raw.url, params: req.params }))
+
+  const address = await instance.listen({ port: 0 })
+  const response = await fetch(address + '/Files/ReadMe.TXT?Sig=AbC')
+  t.assert.strictEqual(response.status, 200)
+  t.assert.deepStrictEqual(await response.json(), {
+    url: '/Files/ReadMe.TXT?Sig=AbC',
+    rawUrl: '/Files/ReadMe.TXT?Sig=AbC',
+    params: { name: 'ReadMe.TXT' }
+  })
+  t.assert.deepStrictEqual(middlewareSeen, { url: '/readme.txt?Sig=AbC', originalUrl: '/Files/ReadMe.TXT?Sig=AbC' })
+})
+
+test('case-insensitive routing keeps the original URL spelling without any middleware', async t => {
+  const instance = fastify({ routerOptions: { caseSensitive: false } })
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+  // Without any middleware Express does not run, and the URL must be restored all the same.
+  instance.get('/Other/:name', async req => ({ url: req.url, params: req.params }))
+
+  const response = await instance.inject('/OTHER/Name?Q=A')
+  t.assert.deepStrictEqual(response.json(), { url: '/OTHER/Name?Q=A', params: { name: 'Name' } })
 })
