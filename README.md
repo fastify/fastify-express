@@ -128,6 +128,8 @@ me@computer ~ % curl -X PATCH -H 'content-type:application/json' -d '{"foo2":"ba
 
 The encapsulation works as usual with Fastify, you can register the plugin in a subsystem and your express code will work only inside there, or you can declare the express plugin top level and register a middleware in a nested plugin, and the middleware will be executed only for the nested routes of the specific plugin.
 
+As with Fastify hooks, a middleware also runs for the routes of the plugins already registered in the instance where `use()` is called, for example after `await fastify.register(plugin)`.
+
 *Register the plugin in its own subsystem:*
 ```js
 const fastify = require('fastify')()

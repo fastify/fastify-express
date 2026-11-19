@@ -575,7 +575,7 @@ test('res.end should block middleware execution', async t => {
 })
 
 test('Use a middleware inside a plugin after an encapsulated plugin', async t => {
-  t.plan(3)
+  t.plan(4)
   const f = fastify()
   t.after(() => f.close())
   f.register(expressPlugin)
