@@ -71,7 +71,7 @@ test('absolute-form targets do not bypass path-scoped middleware', async t => {
   t.assert.deepStrictEqual(seen, [
     { url: '/admin/dashboard', originalUrl: targets[0] },
     { url: '/admin/dashboard', originalUrl: targets[1] },
-    { url: '/admin/dashboard?test=value', originalUrl: targets[2] },
+    { url: '/admin/dashboard?test=%76alue', originalUrl: targets[2] },
     { url: '/admin/dashboard', originalUrl: targets[3] },
     { url: '/admin/dashboard?bypass', originalUrl: targets[4] }
   ])
@@ -137,7 +137,7 @@ test('absolute-form targets without a path resolve to root and preserve the quer
   t.assert.strictEqual((await requestTarget(address, 'http://example.test')).statusCode, 200)
   t.assert.strictEqual((await requestTarget(address, 'http://example.test?next=/admin&x=%76alue')).statusCode, 200)
   t.assert.strictEqual((await requestTarget(address, '*', 'OPTIONS')).statusCode, 200)
-  t.assert.deepStrictEqual(seen, ['/', '/?next=/admin&x=value', '*'])
+  t.assert.deepStrictEqual(seen, ['/', '/?next=/admin&x=%76alue', '*'])
 })
 
 test('malformed request targets are rejected without affecting later requests', async t => {

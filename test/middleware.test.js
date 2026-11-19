@@ -709,7 +709,8 @@ test('middlewares for encoded paths', async t => {
   })
 
   await t.test('does not double decode the url', async (t) => {
-    await checkEncodedPath('/%65ncoded', '/%2565ncoded', t)
+    // A literal `%` in the path stays encoded, as find-my-way keeps it.
+    await checkEncodedPath('/%65ncoded', '/%2565ncoded', t, '/%2565ncoded')
   })
 
   await t.test('handle the decoding for express handlers', async (t) => {
@@ -756,20 +757,20 @@ test('middlewares for encoded paths', async t => {
   })
 })
 
-async function checkEncodedPath (routeUrl, requestUrl, t) {
+async function checkEncodedPath (routeUrl, requestUrl, t, expressUrl = routeUrl) {
   t.plan(6)
 
   const instance = fastify()
   t.after(() => instance.close())
 
   instance.addHook('onSend', async function hook (request, reply, payload) {
-    t.assert.deepStrictEqual(request.raw.url, routeUrl)
+    t.assert.deepStrictEqual(request.raw.url, expressUrl)
     t.assert.deepStrictEqual(request.raw.originalUrl, requestUrl)
     return payload
   })
 
   instance.addHook('onResponse', async function hook (request, reply) {
-    t.assert.deepStrictEqual(request.raw.url, routeUrl)
+    t.assert.deepStrictEqual(request.raw.url, expressUrl)
     t.assert.deepStrictEqual(request.raw.originalUrl, requestUrl)
   })
 
