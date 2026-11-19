@@ -6,6 +6,7 @@ const parseUrl = require('parseurl')
 const { parse, pathToRegexp } = require('path-to-regexp')
 const kMiddlewares = Symbol('fastify-express-middlewares')
 const kDynamicMountMatchers = Symbol('fastify-express-dynamic-mount-matchers')
+const kChildren = Symbol('fastify-express-children')
 
 function fastifyExpress (fastify, options, next) {
   const {
@@ -21,6 +22,7 @@ function fastifyExpress (fastify, options, next) {
   fastify.decorate('use', use)
   fastify[kMiddlewares] = []
   fastify[kDynamicMountMatchers] = []
+  fastify[kChildren] = []
   fastify.decorate('express', Express())
   fastify.express.disable('x-powered-by')
 
@@ -48,14 +50,23 @@ function fastifyExpress (fastify, options, next) {
       // match case-insensitively or it would never match an uppercase spelling.
       path = Array.isArray(path) ? path.map(foldRegExp) : foldRegExp(path)
     }
-    this[kMiddlewares].push([path, fn])
-    this[kDynamicMountMatchers].push(...compileDynamicMountMatchers(path))
-    if (fn == null) {
-      this.express.use(path)
-    } else {
-      this.express.use(path, fn)
-    }
+    addMiddleware(this, path, fn)
     return this
+  }
+
+  // Like a Fastify hook, a middleware also runs for the plugins that were
+  // already registered in the instance, so it is added to them as well.
+  function addMiddleware (instance, path, fn) {
+    instance[kMiddlewares].push([path, fn])
+    instance[kDynamicMountMatchers].push(...compileDynamicMountMatchers(path))
+    if (fn == null) {
+      instance.express.use(path)
+    } else {
+      instance.express.use(path, fn)
+    }
+    for (const child of instance[kChildren]) {
+      addMiddleware(child, path, fn)
+    }
   }
 
   function enhanceRequest (req, reply, next) {
@@ -173,6 +184,10 @@ function fastifyExpress (fastify, options, next) {
     const dynamicMountMatchers = instance[kDynamicMountMatchers].slice()
     instance[kMiddlewares] = middlewares.slice()
     instance[kDynamicMountMatchers] = dynamicMountMatchers.slice()
+    // Until it is replaced, the list is the one of the instance the plugin is
+    // registered in, as is the list of middlewares.
+    instance[kChildren].push(instance)
+    instance[kChildren] = []
     instance.decorate('express', Express())
     instance.express.disable('x-powered-by')
     instance.decorate('use', use)
