@@ -137,7 +137,7 @@ test('absolute-form targets without a path resolve to root and preserve the quer
   t.assert.strictEqual((await requestTarget(address, 'http://example.test')).statusCode, 200)
   t.assert.strictEqual((await requestTarget(address, 'http://example.test?next=/admin&x=%76alue')).statusCode, 200)
   t.assert.strictEqual((await requestTarget(address, '*', 'OPTIONS')).statusCode, 200)
-  t.assert.deepStrictEqual(seen, ['/', '/?next=/admin&x=%76alue', '*'])
+  t.assert.deepStrictEqual(seen, ['/', '/?next=/admin&x=%76alue', '/'])
 })
 
 test('request targets that do not start with a slash do not bypass path-scoped middleware', async t => {
@@ -161,6 +161,27 @@ test('request targets that do not start with a slash do not bypass path-scoped m
   for (const target of ['*admin', '*admin/42', '*tenant/x/admin']) {
     const response = await requestTarget(address, target)
     t.assert.strictEqual(response.statusCode, 400, target)
+  }
+})
+
+test('the asterisk-form request target is matched as the root path', async t => {
+  const instance = Fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  instance.use(/^\/$/, (req, res) => {
+    res.statusCode = 403
+    res.end('blocked')
+  })
+  instance.get('/', async () => ({ secret: 'classified' }))
+  instance.options('/', async () => ({ secret: 'classified' }))
+
+  const address = await instance.listen({ port: 0, host: '127.0.0.1' })
+
+  for (const method of ['GET', 'OPTIONS']) {
+    const response = await requestTarget(address, '*', method)
+    t.assert.strictEqual(response.statusCode, 403, method)
   }
 })
 

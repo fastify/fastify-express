@@ -145,11 +145,13 @@ function normalizeUrl (url, options) {
   } = options
 
   // Match find-my-way's absolute-form handling before normalizing the path.
-  const originFormUrl = getPathFromAbsoluteUrl(url)
-  // Only the asterisk-form (`OPTIONS *`) may not start with `/`. find-my-way
-  // skips the first character of the path, so Fastify routes `*admin` as
-  // `/admin`, while Express would not match it against a mount on `/admin`.
-  if (originFormUrl === null || (originFormUrl[0] !== '/' && originFormUrl !== '*')) {
+  // find-my-way routes the asterisk-form (`OPTIONS *`) as `/`, so Express is
+  // handed `/` too. Any other target must start with `/` once an absolute-form
+  // URL is resolved: find-my-way skips the first character of the path, so
+  // Fastify routes `*admin` as `/admin`, while Express would not match it
+  // against a mount on `/admin`.
+  const originFormUrl = url === '*' ? '/' : getPathFromAbsoluteUrl(url)
+  if (originFormUrl === null || originFormUrl[0] !== '/') {
     return null
   }
 
