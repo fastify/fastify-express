@@ -140,6 +140,30 @@ test('absolute-form targets without a path resolve to root and preserve the quer
   t.assert.deepStrictEqual(seen, ['/', '/?next=/admin&x=%76alue', '*'])
 })
 
+test('request targets that do not start with a slash do not bypass path-scoped middleware', async t => {
+  const instance = Fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  const deny = (req, res) => {
+    res.statusCode = 403
+    res.end('blocked')
+  }
+  instance.use('/admin', deny)
+  instance.use('/tenant/:id/admin', deny)
+  instance.get('/admin', async () => ({ secret: 'classified' }))
+  instance.get('/admin/:id', async () => ({ secret: 'classified' }))
+  instance.get('/tenant/:id/admin', async () => ({ secret: 'classified' }))
+
+  const address = await instance.listen({ port: 0, host: '127.0.0.1' })
+
+  for (const target of ['*admin', '*admin/42', '*tenant/x/admin']) {
+    const response = await requestTarget(address, target)
+    t.assert.strictEqual(response.statusCode, 400, target)
+  }
+})
+
 test('malformed request targets are rejected without affecting later requests', async t => {
   const instance = Fastify({
     routerOptions: {
@@ -175,7 +199,7 @@ test('malformed request targets are rejected without affecting later requests', 
     t.assert.strictEqual(response.statusCode, 400, target)
   }
 
-  for (const target of ['http:///admin', '/admin?value=%zz']) {
+  for (const target of ['http:///admin', '/admin?value=%zz', '*admin']) {
     const response = await instance.inject({
       method: 'GET',
       url: '/admin',
