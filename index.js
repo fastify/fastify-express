@@ -152,6 +152,11 @@ function fastifyExpress (fastify, options, next) {
         reply.raw.setHeader(headerName, headerValue)
       }
 
+      if (req.raw.isLightMyRequest) {
+        keepInjectPrototype(req.raw)
+        keepInjectPrototype(reply.raw)
+      }
+
       this.express(req.raw, reply.raw, caseSensitive === false ? restoreUrl : next)
     } else if (caseSensitive === false) {
       restoreUrl()
@@ -186,6 +191,22 @@ function fastifyExpress (fastify, options, next) {
   }
 
   next()
+}
+
+// Express replaces the prototype of req and res with its own, which drops the
+// light-my-request methods (e.g. res.write/end) that collect the injected payload.
+// Copying them onto the instance keeps them in place after the swap.
+function keepInjectPrototype (obj) {
+  const proto = Object.getPrototypeOf(obj)
+  for (const key of Object.getOwnPropertyNames(proto)) {
+    if (key !== 'constructor' && !Object.hasOwn(obj, key)) {
+      Object.defineProperty(obj, key, {
+        value: proto[key],
+        writable: true,
+        configurable: true
+      })
+    }
+  }
 }
 
 function compileDynamicMountMatchers (path) {
