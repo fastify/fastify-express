@@ -13,6 +13,7 @@ function fastifyExpress (fastify, options, next) {
   const routerOptions = fastify.initialConfig.routerOptions || {}
   const ignoreDuplicateSlashes = routerOptions.ignoreDuplicateSlashes ?? fastify.initialConfig.ignoreDuplicateSlashes
   const useSemicolonDelimiter = routerOptions.useSemicolonDelimiter ?? fastify.initialConfig.useSemicolonDelimiter
+  const caseSensitive = routerOptions.caseSensitive ?? fastify.initialConfig.caseSensitive
 
   fastify.decorate('use', use)
   fastify[kMiddlewares] = []
@@ -32,6 +33,13 @@ function fastifyExpress (fastify, options, next) {
       path = path.map(p => prefixMountPath(p, prefix))
     } else if (path instanceof RegExp && prefix.length > 0) {
       path = prefixRegExp(path, prefix)
+    }
+
+    if (caseSensitive === false) {
+      // The request path is lowercased to mirror the router (see normalizeUrl),
+      // so a RegExp mount path, and the plugin prefix rewritten into it, must
+      // match case-insensitively or it would never match an uppercase spelling.
+      path = Array.isArray(path) ? path.map(foldRegExp) : foldRegExp(path)
     }
     this[kMiddlewares].push([path, fn])
     if (fn == null) {
@@ -63,7 +71,11 @@ function fastifyExpress (fastify, options, next) {
       return
     }
 
-    req.raw.url = normalizedUrl
+    // With case-insensitive routing, Express matches path-scoped middleware on
+    // a path folded the way find-my-way folds it. Route handlers get the
+    // original spelling back once Express is done (see runConnect).
+    req[kNormalizedUrl] = normalizedUrl
+    req.raw.url = caseSensitive === false ? foldPath(normalizedUrl) : normalizedUrl
     req.raw.id = req.id
     req.raw.hostname = req.hostname
     req.raw.ip = req.ip
@@ -114,9 +126,19 @@ function fastifyExpress (fastify, options, next) {
         reply.raw.setHeader(headerName, headerValue)
       }
 
-      this.express(req.raw, reply.raw, next)
+      this.express(req.raw, reply.raw, caseSensitive === false ? restoreUrl : next)
+    } else if (caseSensitive === false) {
+      restoreUrl()
     } else {
       next()
+    }
+
+    // Hand route handlers the URL in its original spelling (see enhanceRequest).
+    function restoreUrl (err) {
+      if (req.raw.url === foldPath(req[kNormalizedUrl])) {
+        req.raw.url = req[kNormalizedUrl]
+      }
+      next(err)
     }
   }
 
@@ -161,6 +183,16 @@ function normalizeUrl (url, options) {
   const normalizedPath = ignoreDuplicateSlashes ? removeDuplicateSlashes(path) : path
 
   return normalizedPath + query
+}
+
+const kNormalizedUrl = Symbol('fastify-express-normalized-url')
+
+// Lowercase the path, not the query, as find-my-way does with caseSensitive: false.
+function foldPath (url) {
+  const queryIndex = url.indexOf('?')
+  return queryIndex === -1
+    ? url.toLowerCase()
+    : url.slice(0, queryIndex).toLowerCase() + url.slice(queryIndex)
 }
 
 function getPathFromAbsoluteUrl (url) {
@@ -226,6 +258,10 @@ function splitPathAndQuery (url, useSemicolonDelimiter) {
     path: url.slice(0, semicolonIndex),
     query: `?${url.slice(semicolonIndex + 1)}`
   }
+}
+
+function foldRegExp (p) {
+  return p instanceof RegExp && !p.flags.includes('i') ? new RegExp(p.source, p.flags + 'i') : p
 }
 
 function removeDuplicateSlashes (path) {
