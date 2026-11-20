@@ -289,21 +289,21 @@ function prefixRegExp (re, prefix) {
   // one, however that slash is spelled (`\/`, `[/]`, `\x2f`, inside a group).
   // The slash is optional and lazy: a pattern that can match the empty string
   // (`/^(?!\/public)/`) must stop right after the prefix, since Express skips
-  // a mount whose match ends in the middle of a path segment.
+  // a mount whose match ends in the middle of a path segment. As for a mounted
+  // Express router, the prefix ends at a slash or at the end of the path.
   const mountPrefix = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix
   const escapedPrefix = escapePrefix(mountPrefix)
-  const boundary = escapedPrefix + '\\/??'
+  const boundary = escapedPrefix + '(?=\\/|$)\\/??'
 
   // Every route of a prefixed plugin starts with the prefix, so the pattern is
   // matched against the rest of the path, as Express does for a mounted
-  // router: `^` in the original pattern now means the end of the prefix, and
-  // an unanchored alternative may match anywhere after it. A `^` leading a
-  // top-level alternative anchors that alternative; any other `^` (e.g. inside
-  // a group) becomes a lookbehind for the same position.
-  const alternatives = rewriteAnchors(re.source, flags.includes('v'), '(?<=^' + boundary + ')')
-  let source = '^' + boundary + '(?:' + alternatives
-    .map(a => a.anchored ? a.source : '[\\s\\S]*?(?:' + a.source + ')')
-    .join('|') + ')'
+  // router. Express only runs a RegExp mount whose match starts the path, so
+  // every alternative is matched from the end of the prefix, whether or not it
+  // starts with `^`; any other `^` (e.g. inside a group) becomes a lookbehind
+  // for the same position. Searching for an unanchored alternative anywhere
+  // after the prefix would also take time quadratic in the length of the path.
+  const pattern = rewriteAnchors(re.source, flags.includes('v'), '(?<=^' + boundary + ')')
+  let source = '^' + boundary + '(?:' + pattern + ')'
 
   // A route at the prefix itself (`/api` for `get('/')`) leaves nothing after
   // the prefix, where a mounted Express router would test the pattern against
@@ -315,21 +315,22 @@ function prefixRegExp (re, prefix) {
   return new RegExp(source, flags)
 }
 
-// Split a RegExp source into its top-level alternatives, stripping the `^`
-// that leads an alternative (reported as `anchored`) and replacing every other
-// `^` assertion with `anchor`. Escapes and character classes are skipped, so
-// `\^`, `[^/]` and `[|]` are left alone.
+// Rewrite the `^` assertions of a RegExp source matched from the end of the
+// prefix: the `^` that leads a top-level alternative is dropped, and every
+// other `^` is replaced with `anchor`. Escapes and character classes are
+// skipped, so `\^`, `[^/]` and `[|]` are left alone.
 function rewriteAnchors (source, unicodeSets, anchor) {
-  const alternatives = []
-  let current = { source: '', anchored: false }
+  let result = ''
+  let leading = true
   let depth = 0
   let classDepth = 0
 
   for (let i = 0; i < source.length; i++) {
     const char = source[i]
+    let startsAlternative = false
 
     if (char === '\\') {
-      current.source += char + source[i + 1]
+      result += char + source[i + 1]
       i++
     } else if (classDepth > 0) {
       // With the `v` flag, classes nest (`[[a-z]--[aeiou]]`).
@@ -338,32 +339,30 @@ function rewriteAnchors (source, unicodeSets, anchor) {
       } else if (char === ']') {
         classDepth--
       }
-      current.source += char
+      result += char
     } else if (char === '[') {
       classDepth = 1
-      current.source += char
+      result += char
     } else if (char === '(') {
       depth++
-      current.source += char
+      result += char
     } else if (char === ')') {
       depth--
-      current.source += char
+      result += char
     } else if (char === '|' && depth === 0) {
-      alternatives.push(current)
-      current = { source: '', anchored: false }
+      result += char
+      startsAlternative = true
     } else if (char === '^') {
-      if (depth === 0 && current.source === '' && !current.anchored) {
-        current.anchored = true
-      } else {
-        current.source += anchor
+      if (!leading) {
+        result += anchor
       }
     } else {
-      current.source += char
+      result += char
     }
+    leading = startsAlternative
   }
 
-  alternatives.push(current)
-  return alternatives
+  return result
 }
 
 module.exports = fp(fastifyExpress, {

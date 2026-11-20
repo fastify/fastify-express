@@ -950,7 +950,7 @@ test('regex mount paths match however the prefix boundary slash is spelled', asy
     [/^\/private|^settings/, '/settings'],
     [/private/, '/private/data'],
     [/(?:^\/private)/, '/private/data'],
-    [/^\/admin|private/, '/nested/private']
+    [/^\/admin|private/, '/private/data']
   ]
 
   for (const prefix of ['/api', '/api/']) {
@@ -979,6 +979,58 @@ test('regex mount paths match however the prefix boundary slash is spelled', asy
       t.assert.deepStrictEqual(open.statusCode, 200, label)
     }
   }
+})
+
+test('regex mount paths in prefixed plugins match from the prefix, as in a mounted Express router', async t => {
+  // Express only runs a RegExp mount whose match starts the path, so a
+  // pattern that only matches further along the path does not apply.
+  const cases = [
+    [/\/private/, '/private/data', 401],
+    [/\/private/, '/nested/private', 200],
+    [/private/, '/nested/private', 200],
+    [/^\/admin|private/, '/nested/private', 200],
+    [/.*private/, '/nested/private', 401]
+  ]
+
+  for (const [mount, route, statusCode] of cases) {
+    const label = `use(${mount}) GET ${route}`
+    const instance = fastify()
+    t.after(() => instance.close())
+    await instance.register(expressPlugin)
+
+    await instance.register(async function (scope) {
+      scope.use(mount, function (_req, res) {
+        res.statusCode = 401
+        res.end('blocked')
+      })
+      scope.get(route, async () => ({ ok: true }))
+    }, { prefix: '/api' })
+
+    const response = await instance.inject('/api' + route)
+    t.assert.deepStrictEqual(response.statusCode, statusCode, label)
+  }
+})
+
+test('regex mount paths in prefixed plugins are matched in linear time', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (scope) {
+    scope.use(/.*private/, function (_req, res) {
+      res.statusCode = 401
+      res.end('blocked')
+    })
+    scope.get('/*', async () => ({ ok: true }))
+  }, { prefix: '/api' })
+
+  // Searching for the pattern from every position after the prefix took
+  // seconds on a path this long.
+  const start = performance.now()
+  const response = await instance.inject('/api/' + 'a'.repeat(100_000))
+  const elapsed = performance.now() - start
+  t.assert.deepStrictEqual(response.statusCode, 200)
+  t.assert.ok(elapsed < 1000, `matching took ${Math.round(elapsed)} ms`)
 })
 
 test('escapes and character classes in regex mount paths are not rewritten', async t => {
