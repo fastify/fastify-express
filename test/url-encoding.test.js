@@ -142,3 +142,34 @@ test('mount paths are spelled like Fastify routes', async t => {
     t.assert.strictEqual(response.statusCode, 401, target)
   }
 })
+
+test('encoded line terminators do not defeat a RegExp mount path', async t => {
+  const instance = Fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  instance.use(/^\/admin(?:\/.*)?$/, deny)
+  instance.use(/^\/reports\/[^/]+$/m, deny)
+  instance.get('/admin/users/:id', async request => ({ id: request.params.id }))
+  instance.get('/reports/:id', async request => ({ id: request.params.id }))
+
+  let seen
+  instance.use('/open', (req, res, next) => {
+    seen = req.url
+    next()
+  })
+  instance.get('/open/:id', async request => ({ id: request.params.id }))
+
+  const address = await instance.listen({ port: 0, host: '127.0.0.1' })
+
+  for (const target of ['/admin/users/42', '/admin/users/42%E2%80%A8', '/admin/users/42%E2%80%A9', '/reports/1%E2%80%A8x']) {
+    const response = await requestTarget(address, target)
+    t.assert.strictEqual(response.statusCode, 401, target)
+  }
+
+  const response = await requestTarget(address, '/open/42%E2%80%A8')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.deepStrictEqual(JSON.parse(response.payload), { id: '42\u2028' })
+  t.assert.strictEqual(seen, '/42%E2%80%A8')
+})
