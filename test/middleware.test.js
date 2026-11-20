@@ -756,6 +756,276 @@ test('middlewares for encoded paths', async t => {
   })
 })
 
+test('reject ambiguous blank parameters for dynamic middleware mounts', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  const middlewareCalls = []
+  function block (name) {
+    return function (_req, res) {
+      middlewareCalls.push(name)
+      res.statusCode = 403
+      res.end('blocked')
+    }
+  }
+
+  instance.use('/tenant/:tenantId', block('tenant'))
+  instance.use('/nested/:one/:two', block('nested'))
+  instance.use('/files/*splat', block('files'))
+  instance.use(['/array/:id', /^\/regex/], block('array'))
+  instance.use('/group{/:id}/private', block('group'))
+  instance.use('/static-parent', block('static-parent'))
+
+  instance.get('/tenant/:tenantId', async request => request.params)
+  instance.get('/nested/:one/:two', async request => request.params)
+  instance.get('/files/*', async request => request.params)
+  instance.get('/array/:id', async request => request.params)
+  instance.get('/group/:id/private', async request => request.params)
+  instance.get('/static-parent/:id', async request => request.params)
+  instance.get('/unrelated/:id', async request => request.params)
+
+  await instance.register(async child => {
+    child.use('/child/:id', block('child'))
+    child.get('/child/:id', async request => request.params)
+  }, { prefix: '/api' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const nonEmpty = await fetch(address + '/tenant/acme')
+  t.assert.deepStrictEqual(nonEmpty.status, 403)
+  t.assert.deepStrictEqual(middlewareCalls, ['tenant'])
+
+  middlewareCalls.length = 0
+  const interiorWhitespace = await fetch(address + '/nested/%20/value')
+  t.assert.deepStrictEqual(interiorWhitespace.status, 403)
+  t.assert.deepStrictEqual(middlewareCalls, ['nested'])
+
+  for (const path of [
+    '/tenant/',
+    '/tenant/?query=value',
+    '/tenant/%20',
+    '/tenant/%09',
+    '/nested//value',
+    '/nested/value/',
+    '/files/',
+    '/array/',
+    '/group//private',
+    '/api/child/'
+  ]) {
+    middlewareCalls.length = 0
+    const response = await fetch(address + path)
+    t.assert.deepStrictEqual(response.status, 400, path)
+    t.assert.deepStrictEqual(middlewareCalls, [], path)
+  }
+
+  const staticParent = await fetch(address + '/static-parent/')
+  t.assert.deepStrictEqual(staticParent.status, 403)
+  t.assert.deepStrictEqual(middlewareCalls, ['static-parent'])
+
+  middlewareCalls.length = 0
+  const unrelated = await fetch(address + '/unrelated/')
+  t.assert.deepStrictEqual(unrelated.status, 200)
+  t.assert.deepStrictEqual(await unrelated.json(), { id: '' })
+  t.assert.deepStrictEqual(middlewareCalls, [])
+})
+
+test('allow blank parameters when no dynamic middleware mount applies', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalls = 0
+  instance.use(function (_req, _res, next) {
+    middlewareCalls++
+    next()
+  })
+  instance.get('/open/:id', async request => request.params)
+
+  const address = await instance.listen({ port: 0 })
+  const response = await fetch(address + '/open/')
+
+  t.assert.deepStrictEqual(response.status, 200)
+  t.assert.deepStrictEqual(await response.json(), { id: '' })
+  t.assert.deepStrictEqual(middlewareCalls, 1)
+})
+
+test('reject blank segments when the route shape differs from the dynamic mount', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  const middlewareCalls = []
+  function block (name) {
+    return function (_req, res) {
+      middlewareCalls.push(name)
+      res.statusCode = 403
+      res.end('blocked')
+    }
+  }
+
+  // Auth is mounted on a dynamic parameter, but the serving route is a wildcard
+  // or catch-all, so the blank segment is captured as a non-blank route value.
+  instance.use('/tenant/:tenantId', block('tenant'))
+  instance.use('/files/:id', block('files'))
+
+  instance.get('/tenant/*', async request => request.params)
+  instance.get('/*', async request => request.params)
+
+  const address = await instance.listen({ port: 0 })
+
+  for (const path of [
+    '/tenant//private',
+    '/tenant//',
+    '/files/'
+  ]) {
+    middlewareCalls.length = 0
+    const response = await fetch(address + path)
+    t.assert.deepStrictEqual(response.status, 400, path)
+    t.assert.deepStrictEqual(middlewareCalls, [], path)
+  }
+})
+
+test('reject blank segments for dynamic middleware mounts with a trailing slash', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  const middlewareCalls = []
+  // Express strips the trailing slash from the mount before matching, so a
+  // blank segment must still be rejected.
+  instance.use('/tenant/:tenantId/', function (_req, res) {
+    middlewareCalls.push('tenant')
+    res.statusCode = 403
+    res.end('blocked')
+  })
+  instance.get('/tenant/:tenantId', async request => request.params)
+
+  const address = await instance.listen({ port: 0 })
+  const response = await fetch(address + '/tenant/')
+
+  t.assert.deepStrictEqual(response.status, 400)
+  t.assert.deepStrictEqual(middlewareCalls, [])
+})
+
+test('reject blank segments for RegExp dynamic middleware mounts', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  const middlewareCalls = []
+  // A RegExp mount that requires a non-empty segment is skipped by Express for
+  // a blank segment, so the plugin must still reject it.
+  instance.use(/^\/tenant\/[^/]+/, function (_req, res) {
+    middlewareCalls.push('tenant')
+    res.statusCode = 403
+    res.end('blocked')
+  })
+  instance.get('/tenant/:tenantId', async request => request.params)
+
+  const address = await instance.listen({ port: 0 })
+  const response = await fetch(address + '/tenant/')
+
+  t.assert.deepStrictEqual(response.status, 400)
+  t.assert.deepStrictEqual(middlewareCalls, [])
+})
+
+test('does not backtrack on dynamic mounts with multiple parameters in one segment', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  instance.use('/report/:a-:b-:c-:d-:e-:f-:g-:h/export', function (_req, res) {
+    res.statusCode = 403
+    res.end('blocked')
+  })
+  instance.get('/report/:a-:b-:c-:d-:e-:f-:g-:h/export', async request => request.params)
+  instance.get('/report/:x/:y', async request => request.params)
+
+  const address = await instance.listen({ port: 0 })
+
+  // A blank trailing parameter forces the ambiguity check to evaluate the
+  // permissive matcher against a long single segment.
+  const start = process.hrtime.bigint()
+  const response = await fetch(address + '/report/' + '-'.repeat(64) + '/')
+  const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6
+
+  t.assert.ok(response.status === 200 || response.status === 400)
+  t.assert.ok(elapsedMs < 1000, `matcher took ${elapsedMs.toFixed(0)}ms`)
+})
+
+test('reject blank wildcards followed by a literal suffix in dynamic middleware mounts', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  const middlewareCalls = []
+  // The wildcard is followed by a non-slash literal, so the permissive matcher
+  // excludes that delimiter instead of using `.*`.
+  instance.use('/files/*splat.txt', function (_req, res) {
+    middlewareCalls.push('files')
+    res.statusCode = 403
+    res.end('blocked')
+  })
+  instance.get('/files/*', async request => request.params)
+
+  const address = await instance.listen({ port: 0 })
+
+  const nonEmpty = await fetch(address + '/files/report.txt')
+  t.assert.deepStrictEqual(nonEmpty.status, 403)
+  t.assert.deepStrictEqual(middlewareCalls, ['files'])
+
+  middlewareCalls.length = 0
+  const blank = await fetch(address + '/files/.txt')
+  t.assert.deepStrictEqual(blank.status, 400)
+  t.assert.deepStrictEqual(middlewareCalls, [])
+})
+
+test('static routes next to dynamic middleware mounts are not rejected', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalls = 0
+  function block (_req, res) {
+    middlewareCalls++
+    res.statusCode = 403
+    res.end('blocked')
+  }
+
+  // None of these mounts covers the static route next to it, in Express or here.
+  instance.use('/users/:id', block)
+  instance.use('/:lang/docs', block)
+  instance.use(/^\/admin\/.+/, block)
+  instance.use('/files/*path', block)
+  instance.get('/users/', async () => ({ list: true }))
+  instance.get('/', async () => ({ home: true }))
+  instance.get('/admin/', async () => ({ index: true }))
+  instance.get('/files/', async () => ({ listing: true }))
+
+  await instance.register(async function (users) {
+    users.use('/:id', block)
+    users.get('/', async () => ({ list: true }))
+  }, { prefix: '/members' })
+
+  for (const path of ['/users/', '/', '/admin/', '/files/', '/members', '/members/']) {
+    const response = await instance.inject(path)
+    t.assert.deepStrictEqual(response.statusCode, 200, path)
+  }
+  t.assert.deepStrictEqual(middlewareCalls, 0)
+
+  // Unmatched requests are plain 404s.
+  t.assert.deepStrictEqual((await instance.inject('/missing/')).statusCode, 404)
+})
+
 async function checkEncodedPath (routeUrl, requestUrl, t) {
   t.plan(6)
 

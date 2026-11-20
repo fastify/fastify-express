@@ -2,7 +2,10 @@
 
 const fp = require('fastify-plugin')
 const Express = require('express')
+const parseUrl = require('parseurl')
+const { parse, pathToRegexp } = require('path-to-regexp')
 const kMiddlewares = Symbol('fastify-express-middlewares')
+const kDynamicMountMatchers = Symbol('fastify-express-dynamic-mount-matchers')
 
 function fastifyExpress (fastify, options, next) {
   const {
@@ -17,6 +20,7 @@ function fastifyExpress (fastify, options, next) {
 
   fastify.decorate('use', use)
   fastify[kMiddlewares] = []
+  fastify[kDynamicMountMatchers] = []
   fastify.decorate('express', Express())
   fastify.express.disable('x-powered-by')
 
@@ -42,6 +46,7 @@ function fastifyExpress (fastify, options, next) {
       path = Array.isArray(path) ? path.map(foldRegExp) : foldRegExp(path)
     }
     this[kMiddlewares].push([path, fn])
+    this[kDynamicMountMatchers].push(...compileDynamicMountMatchers(path))
     if (fn == null) {
       this.express.use(path)
     } else {
@@ -121,6 +126,18 @@ function fastifyExpress (fastify, options, next) {
   }
 
   function runConnect (req, reply, next) {
+    // An empty segment can match a Fastify route while the Express mount on the
+    // same dynamic pattern is skipped, bypassing its middleware. Reject such
+    // ambiguous requests. Only a route with parameters or a wildcard can take
+    // the empty segment: a static route (e.g. `/users/` next to a
+    // `/users/:id` mount) is not covered by the mount, as in Express.
+    if (isDynamicRoute(req.routeOptions.url) && hasAmbiguousDynamicMount(this[kDynamicMountMatchers], req.raw)) {
+      const error = new Error('Invalid route parameter')
+      error.statusCode = 400
+      next(error)
+      return
+    }
+
     if (this[kMiddlewares].length > 0) {
       for (const [headerName, headerValue] of Object.entries(reply.getHeaders())) {
         reply.raw.setHeader(headerName, headerValue)
@@ -144,7 +161,9 @@ function fastifyExpress (fastify, options, next) {
 
   function onRegister (instance) {
     const middlewares = instance[kMiddlewares].slice()
+    const dynamicMountMatchers = instance[kDynamicMountMatchers].slice()
     instance[kMiddlewares] = middlewares.slice()
+    instance[kDynamicMountMatchers] = dynamicMountMatchers.slice()
     instance.decorate('express', Express())
     instance.express.disable('x-powered-by')
     instance.decorate('use', use)
@@ -158,6 +177,90 @@ function fastifyExpress (fastify, options, next) {
   }
 
   next()
+}
+
+function compileDynamicMountMatchers (path) {
+  const paths = Array.isArray(path) ? path : [path]
+  const matchers = []
+
+  for (const mountPath of paths) {
+    if (mountPath instanceof RegExp) {
+      // A RegExp mount cannot be modelled as a string, so keep the pattern and
+      // detect ambiguity by filling empty segments (see hasAmbiguousDynamicMount).
+      matchers.push({
+        express: new RegExp(mountPath.source, mountPath.flags.replace(/[gy]/g, '')),
+        permissive: null
+      })
+      continue
+    }
+
+    if (typeof mountPath !== 'string') {
+      continue
+    }
+
+    // Express strips trailing slashes from string mounts before matching.
+    const loosened = mountPath === '/' ? mountPath : mountPath.replace(/\/+$/, '')
+    const compiled = compileTokens(parse(loosened).tokens)
+    if (compiled.dynamic) {
+      matchers.push({
+        express: pathToRegexp(loosened, { end: false }).regexp,
+        permissive: new RegExp(`^(?:${compiled.source})(?:\\/$)?(?=\\/|$)`, 'i')
+      })
+    }
+  }
+
+  return matchers
+}
+
+function compileTokens (tokens) {
+  let source = ''
+  let dynamic = false
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]
+    if (token.type === 'text') {
+      source += token.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    } else if (token.type === 'param' || token.type === 'wildcard') {
+      // Exclude the following literal's delimiter so adjacent parameters in a
+      // single segment cannot overlap and cause catastrophic backtracking.
+      const next = tokens[i + 1]
+      const delimiter = next && next.type === 'text' ? next.value[0] : ''
+      const excluded = delimiter && delimiter !== '/' ? delimiter.replace(/[-\]\\^]/g, '\\$&') : ''
+      source += token.type === 'wildcard'
+        ? (excluded ? `[^${excluded}]*` : '.*')
+        : `[^${excluded}/]*`
+      dynamic = true
+    } else if (token.type === 'group') {
+      const group = compileTokens(token.tokens)
+      source += `(?:${group.source})?`
+      dynamic ||= group.dynamic
+    }
+  }
+
+  return { source, dynamic }
+}
+
+function isDynamicRoute (url) {
+  return url !== undefined && /[:*]/.test(url)
+}
+
+function hasAmbiguousDynamicMount (matchers, rawRequest) {
+  const path = parseUrl(rawRequest).pathname
+  return matchers.some(matcher => {
+    if (matcher.permissive === null) {
+      // RegExp mount: ambiguous when the pattern misses only because a segment
+      // is empty, i.e. it matches once the empty segments are filled.
+      return !matcher.express.test(path) && matcher.express.test(fillEmptySegments(path))
+    }
+    return !matcher.express.test(path) && matcher.permissive.test(path)
+  })
+}
+
+function fillEmptySegments (path) {
+  return path
+    .split('/')
+    .map((segment, index) => index > 0 && segment.trim().length === 0 ? 'a' : segment)
+    .join('/')
 }
 
 function normalizeUrl (url, options) {
