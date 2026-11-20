@@ -150,8 +150,8 @@ test('case-insensitive routing does not bypass path-scoped middleware', async t 
   // Middleware matched on the folded path; the handler sees the original spelling.
   t.assert.strictEqual(middlewareUrl, '/api/keys')
   t.assert.deepStrictEqual(await response.json(), {
-    url: '/api/Keys?Key=K',
-    rawUrl: '/api/Keys?Key=K',
+    url: '/api/Keys?Key=%E2%84%AA',
+    rawUrl: '/api/Keys?Key=%E2%84%AA',
     originalUrl: '/api/%E2%84%AAeys?Key=%E2%84%AA'
   })
   t.assert.strictEqual(middlewareCalls, 7)

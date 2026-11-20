@@ -678,7 +678,8 @@ test('middlewares for encoded paths', async t => {
   })
 
   await t.test('does not double decode the url', async (t) => {
-    await checkEncodedPath('/%65ncoded', '/%2565ncoded', t)
+    // A literal `%` in the path stays encoded, as find-my-way keeps it.
+    await checkEncodedPath('/%65ncoded', '/%2565ncoded', t, '/%2565ncoded')
   })
 
   await t.test('handle the decoding for express handlers', async (t) => {
@@ -771,11 +772,18 @@ test('reject ambiguous blank parameters for dynamic middleware mounts', async t 
   t.assert.deepStrictEqual(interiorWhitespace.status, 403)
   t.assert.deepStrictEqual(middlewareCalls, ['nested'])
 
+  // Whitespace stays percent-encoded in the URL Express matches, so a
+  // whitespace-only value is not blank to it and the middleware runs.
+  for (const path of ['/tenant/%20', '/tenant/%09']) {
+    middlewareCalls.length = 0
+    const response = await fetch(address + path)
+    t.assert.deepStrictEqual(response.status, 403, path)
+    t.assert.deepStrictEqual(middlewareCalls, ['tenant'], path)
+  }
+
   for (const path of [
     '/tenant/',
     '/tenant/?query=value',
-    '/tenant/%20',
-    '/tenant/%09',
     '/nested//value',
     '/nested/value/',
     '/files/',
@@ -995,20 +1003,20 @@ test('static routes next to dynamic middleware mounts are not rejected', async t
   t.assert.deepStrictEqual((await instance.inject('/missing/')).statusCode, 404)
 })
 
-async function checkEncodedPath (routeUrl, requestUrl, t) {
+async function checkEncodedPath (routeUrl, requestUrl, t, expressUrl = routeUrl) {
   t.plan(6)
 
   const instance = fastify()
   t.after(() => instance.close())
 
   instance.addHook('onSend', async function hook (request, reply, payload) {
-    t.assert.deepStrictEqual(request.raw.url, routeUrl)
+    t.assert.deepStrictEqual(request.raw.url, expressUrl)
     t.assert.deepStrictEqual(request.raw.originalUrl, requestUrl)
     return payload
   })
 
   instance.addHook('onResponse', async function hook (request, reply) {
-    t.assert.deepStrictEqual(request.raw.url, routeUrl)
+    t.assert.deepStrictEqual(request.raw.url, expressUrl)
     t.assert.deepStrictEqual(request.raw.originalUrl, requestUrl)
   })
 

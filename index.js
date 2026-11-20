@@ -33,7 +33,7 @@ function fastifyExpress (fastify, options, next) {
     // With ignoreDuplicateSlashes the router collapses repeated slashes in the
     // routes it registers and in the request URL (see normalizeUrl), so mount
     // paths must be collapsed too or they can never match.
-    const prefix = ignoreDuplicateSlashes ? removeDuplicateSlashes(this.prefix) : this.prefix
+    const prefix = encodeMountPath(ignoreDuplicateSlashes ? removeDuplicateSlashes(this.prefix) : this.prefix)
     if (typeof path === 'string') {
       path = prefixMountPath(path, prefix, ignoreDuplicateSlashes)
     } else if (Array.isArray(path) && path.length > 0 && typeof path[0] !== 'function') {
@@ -273,22 +273,53 @@ function normalizeUrl (url, options) {
   } = options
 
   // Match find-my-way's absolute-form handling before normalizing the path.
-  const originFormUrl = getPathFromAbsoluteUrl(url)
-  if (originFormUrl === null) {
+  // find-my-way routes the asterisk-form (`OPTIONS *`) as `/`, so Express is
+  // handed `/` too. Any other target must start with `/` once an absolute-form
+  // URL is resolved: find-my-way skips the first character of the path, so
+  // Fastify routes `*admin` as `/admin`, while Express would not match it
+  // against a mount on `/admin`.
+  const originFormUrl = url === '*' ? '/' : getPathFromAbsoluteUrl(url)
+  if (originFormUrl === null || originFormUrl[0] !== '/') {
     return null
   }
 
-  let decodedUrl
+  // Split off the query string before decoding, as find-my-way does, so that
+  // Express decodes it only once, as Fastify does.
+  const { path, query } = splitPathAndQuery(originFormUrl, useSemicolonDelimiter)
+
+  // Decode the path the way find-my-way does before routing: `%25` stays
+  // encoded, so a literal `%` is not decoded a second time when Express
+  // decodes route parameters.
+  let decodedPath
   try {
-    decodedUrl = decodeURI(originFormUrl)
+    decodedPath = decodeURI(path.replaceAll('%25', '%2525'))
+    // The query string is passed on undecoded, but malformed percent-encoding
+    // in it is still rejected, as it was when the whole URL was decoded.
+    decodeURI(query)
   } catch {
     return null
   }
 
-  const { path, query } = splitPathAndQuery(decodedUrl, useSemicolonDelimiter)
-  const normalizedPath = ignoreDuplicateSlashes ? removeDuplicateSlashes(path) : path
+  const normalizedPath = ignoreDuplicateSlashes ? removeDuplicateSlashes(decodedPath) : decodedPath
 
-  return normalizedPath + query
+  return encodeParseurlFallbackChars(normalizedPath + query)
+}
+
+// Express reads req.url with parseurl, which hands a URL containing any of
+// these characters to the legacy url.parse(). That parser rewrites `\` to `/`,
+// so Express would match mount paths against a different path from the one
+// Fastify routed. Percent-encoding them keeps parseurl on its fast path.
+const PARSEURL_FALLBACK_CHARS = /[\t\n\f\r #\u00a0\ufeff]/g
+
+function encodeParseurlFallbackChars (url) {
+  return url.replace(PARSEURL_FALLBACK_CHARS, encodeURIComponent)
+}
+
+// Spell a mount path the way normalizeUrl() spells the request path, so that
+// it means what the same string means as a Fastify route: find-my-way also
+// stores a literal `%` in a route as `%25`.
+function encodeMountPath (path) {
+  return encodeParseurlFallbackChars(path.replaceAll('%', '%25'))
 }
 
 const kNormalizedUrl = Symbol('fastify-express-normalized-url')
@@ -334,35 +365,17 @@ function getPathFromAbsoluteUrl (url) {
 }
 
 function splitPathAndQuery (url, useSemicolonDelimiter) {
-  const queryIndex = url.indexOf('?')
+  // Like find-my-way, end the path at the first `?` or `#`, or at the first
+  // `;` when useSemicolonDelimiter is set.
+  const queryIndex = url.search(useSemicolonDelimiter ? /[?#;]/ : /[?#]/)
 
-  if (!useSemicolonDelimiter) {
-    if (queryIndex === -1) {
-      return { path: url, query: '' }
-    }
-
-    return {
-      path: url.slice(0, queryIndex),
-      query: url.slice(queryIndex)
-    }
-  }
-
-  const semicolonIndex = url.indexOf(';')
-
-  if (semicolonIndex === -1 || (queryIndex !== -1 && queryIndex < semicolonIndex)) {
-    if (queryIndex === -1) {
-      return { path: url, query: '' }
-    }
-
-    return {
-      path: url.slice(0, queryIndex),
-      query: url.slice(queryIndex)
-    }
+  if (queryIndex === -1) {
+    return { path: url, query: '' }
   }
 
   return {
-    path: url.slice(0, semicolonIndex),
-    query: `?${url.slice(semicolonIndex + 1)}`
+    path: url.slice(0, queryIndex),
+    query: `?${url.slice(queryIndex + 1)}`
   }
 }
 
@@ -396,7 +409,7 @@ function joinPrefix (prefix, path) {
 
 function prefixMountPath (p, prefix, ignoreDuplicateSlashes) {
   if (typeof p === 'string') {
-    const joined = joinPrefix(prefix, p)
+    const joined = joinPrefix(prefix, encodeMountPath(p))
     if (!ignoreDuplicateSlashes) {
       return joined
     }

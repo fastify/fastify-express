@@ -57,23 +57,30 @@ test('trust proxy protocol', async (t) => {
 })
 
 test('query params still in in the request url after decodeURI', async (t) => {
-  t.plan(2)
   const fastify = Fastify()
 
   t.after(() => fastify.close())
 
+  // Record what the middleware sees and assert afterwards: Express would
+  // swallow an assertion thrown inside the middleware.
+  let seen
   fastify.register(expressPlugin).after(() => {
-    fastify.use('/admin', function (req, res) {
-      t.assert.deepStrictEqual(req.originalUrl, '/%61dmin?test=%76alue&test2=%76alue', 'originalUrl is not decoded')
-      t.assert.deepStrictEqual(req.url, '/admin?test=value&test2=value', 'url is decoded')
-
+    fastify.use(function (req, res) {
+      seen = { originalUrl: req.originalUrl, url: req.url, query: { ...req.query } }
       res.sendStatus(200)
     })
   })
 
   const address = await fastify.listen({ port: 0 })
 
-  await fetch(`${address}/%61dmin?test=%76alue&test2=%76alue`)
+  const response = await fetch(`${address}/%61dmin?test=%76alue&test2=%76alue`)
+  t.assert.strictEqual(response.status, 200)
+  t.assert.deepStrictEqual(seen, {
+    originalUrl: '/%61dmin?test=%76alue&test2=%76alue',
+    // Only the path is decoded; the query string is decoded once, by Express.
+    url: '/admin?test=%76alue&test2=%76alue',
+    query: { test: 'value', test2: 'value' }
+  })
 })
 
 test('passing createProxyHandler sets up a Proxy with Express req', async t => {
