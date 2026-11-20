@@ -209,8 +209,9 @@ async function subsystem (fastify, opts) {
 > **Note:** In prefixed plugins, `@fastify/express` rewrites string, array, and
 > RegExp mount paths to include the prefix. A RegExp path is matched against
 > the rest of the URL after the prefix, as Express does for a mounted router:
-> `^`, including inside groups (e.g., `/(?:^\/a|^\/b)/`), anchors at the end of
-> the prefix, and an unanchored pattern may match anywhere after it. The `g` and
+> Express only runs a RegExp mount whose match starts the path, so the pattern
+> must match from the end of the prefix, whether or not it starts with `^`, and
+> a `^` inside a group (e.g., `/(?:^\/a|^\/b)/`) also anchors there. The `g` and
 > `y` flags are dropped from RegExp mount paths, since they make matching stateful.
 
 ### Wrap Express req in Proxy
