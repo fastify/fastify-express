@@ -14,10 +14,15 @@ function fastifyExpress (fastify, options, next) {
     createProxyHandler
   } = options
 
-  const routerOptions = fastify.initialConfig.routerOptions || {}
-  const ignoreDuplicateSlashes = routerOptions.ignoreDuplicateSlashes ?? fastify.initialConfig.ignoreDuplicateSlashes
-  const useSemicolonDelimiter = routerOptions.useSemicolonDelimiter ?? fastify.initialConfig.useSemicolonDelimiter
-  const caseSensitive = routerOptions.caseSensitive ?? fastify.initialConfig.caseSensitive
+  const { initialConfig } = fastify
+  const routerOptions = initialConfig.routerOptions || {}
+  // Fastify fills `false` defaults into initialConfig.routerOptions whenever a
+  // routerOptions object is passed, while its router falls back to the
+  // deprecated top-level option for every key that object does not set, so
+  // follow either one that turns an option on.
+  const ignoreDuplicateSlashes = routerOptions.ignoreDuplicateSlashes === true || initialConfig.ignoreDuplicateSlashes === true
+  const useSemicolonDelimiter = routerOptions.useSemicolonDelimiter === true || initialConfig.useSemicolonDelimiter === true
+  const caseSensitive = routerOptions.caseSensitive ?? initialConfig.caseSensitive
 
   fastify.decorate('use', use)
   fastify[kMiddlewares] = []
