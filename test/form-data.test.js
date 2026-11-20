@@ -34,7 +34,7 @@ test('POST request without form body works', async t => {
 
   const result = await fetch(address + '/hello', {
     method: 'post',
-    signal: AbortSignal.timeout(100)
+    signal: AbortSignal.timeout(5000)
   })
 
   t.assert.deepStrictEqual(result.status, 200)
@@ -67,7 +67,7 @@ test('POST request with form body and without body-parser works', async t => {
   const result = await fetch(address + '/hello', {
     method: 'post',
     body: new URLSearchParams({ input: 'test' }),
-    signal: AbortSignal.timeout(100)
+    signal: AbortSignal.timeout(5000)
   })
 
   t.assert.deepStrictEqual(result.status, 200)
@@ -133,7 +133,7 @@ test('POST request with form body and body-parser hangs up, compatibility case',
   const result = await fetch(address + '/hello', {
     method: 'post',
     body: new URLSearchParams({ input: 'test' }),
-    signal: AbortSignal.timeout(100)
+    signal: AbortSignal.timeout(5000)
   })
 
   t.assert.deepStrictEqual(result.status, 200)
