@@ -14,7 +14,10 @@ function requestTarget (address, target) {
 
   return new Promise((resolve, reject) => {
     const socket = net.createConnection({ host: hostname, port }, () => {
-      socket.end(`GET ${target} HTTP/1.1\r\nHost: ${hostname}:${port}\r\nConnection: close\r\n\r\n`)
+      // Do not half-close the connection: Node.js aborts a request still in
+      // flight when the client ends its side, so its response would be lost.
+      // The server closes the connection after responding (Connection: close).
+      socket.write(`GET ${target} HTTP/1.1\r\nHost: ${hostname}:${port}\r\nConnection: close\r\n\r\n`)
     })
 
     let response = ''
