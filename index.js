@@ -409,8 +409,61 @@ function prefixMountPath (p, prefix, ignoreDuplicateSlashes) {
   return p
 }
 
-function escapePrefix (prefix) {
-  return prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const ESCAPE_REGEXP = /[.*+?^${}()|[\]\\]/g
+
+// Translate a Fastify route prefix (e.g. `/tenant/:tenantId`, `/a::b`,
+// `/user/:id(\\d+)`) into a RegExp source that matches the concrete URLs
+// Fastify routes to the plugin. Escaping the prefix wholesale treated `:param`
+// as literal text, so RegExp-mounted middleware was skipped for ordinary URLs,
+// bypassing auth (GHSA-84w6-xrf3-f8q8).
+//
+// find-my-way has already routed the request into this plugin, so a prefix
+// segment holding a parameter (`:id`, `:id(\\d+)`, `:from-:to`) only needs to
+// match one whole segment. Copying a parameter regex into the pattern instead
+// would change what its `^` and `$` mean (find-my-way tests it against one
+// segment), could make the pattern invalid under the `u` or `v` flag, and lets
+// several parameters in one segment backtrack.
+function prefixToRegExpSource (prefix) {
+  let result = ''
+  let segment = ''
+  let dynamic = false
+  let depth = 0
+
+  const flush = () => {
+    const source = dynamic ? '[^\\/]*' : segment.replace(ESCAPE_REGEXP, '\\$&')
+    segment = ''
+    dynamic = false
+    return source
+  }
+
+  for (let i = 0; i < prefix.length; i++) {
+    const char = prefix[i]
+
+    if (depth > 0) {
+      // Skip a parameter regex; find-my-way keeps it within one segment.
+      if (char === '\\') {
+        i++
+      } else if (char === '(') {
+        depth++
+      } else if (char === ')') {
+        depth--
+      }
+    } else if (char === '/') {
+      result += flush() + '\\/'
+    } else if (char === ':' && prefix[i + 1] === ':') {
+      // `::` is an escaped literal colon in find-my-way.
+      segment += ':'
+      i++
+    } else if (char === ':') {
+      dynamic = true
+    } else if (char === '(' && dynamic) {
+      depth = 1
+    } else {
+      segment += char
+    }
+  }
+
+  return result + flush()
 }
 
 function prefixRegExp (re, prefix) {
@@ -431,7 +484,7 @@ function prefixRegExp (re, prefix) {
   // a mount whose match ends in the middle of a path segment. As for a mounted
   // Express router, the prefix ends at a slash or at the end of the path.
   const mountPrefix = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix
-  const escapedPrefix = escapePrefix(mountPrefix)
+  const escapedPrefix = prefixToRegExpSource(mountPrefix)
   const boundary = escapedPrefix + '(?=\\/|$)\\/??'
 
   // Every route of a prefixed plugin starts with the prefix, so the pattern is

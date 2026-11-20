@@ -526,38 +526,6 @@ test('mixed array of strings and regexes is rewritten with prefix', async t => {
   t.assert.deepStrictEqual(await privateWithAuth.json(), { secret: 'admin-data' })
 })
 
-test('regex with grouped anchors is rewritten with prefix', async t => {
-  const instance = fastify()
-  t.after(() => instance.close())
-
-  await instance.register(expressPlugin)
-
-  const middlewareCalls = []
-
-  await instance.register(async function (child) {
-    child.use(/(?:^\/private|^\/settings)/, function (req, res) {
-      middlewareCalls.push(req.originalUrl)
-      res.statusCode = 403
-      res.end('blocked by middleware')
-    })
-
-    child.get('/private', async () => ({ ok: true }))
-    child.get('/settings', async () => ({ ok: true }))
-    child.get('/public', async () => ({ ok: true }))
-    child.get('/nested/private', async () => ({ ok: true }))
-  }, { prefix: '/admin' })
-
-  t.assert.deepStrictEqual((await instance.inject('/admin/private')).statusCode, 403)
-  t.assert.deepStrictEqual((await instance.inject('/admin/settings')).statusCode, 403)
-  t.assert.deepStrictEqual(middlewareCalls, ['/admin/private', '/admin/settings'])
-
-  // The grouped anchors still pin the match to the start of the plugin path.
-  middlewareCalls.length = 0
-  t.assert.deepStrictEqual((await instance.inject('/admin/public')).statusCode, 200)
-  t.assert.deepStrictEqual((await instance.inject('/admin/nested/private')).statusCode, 200)
-  t.assert.deepStrictEqual(middlewareCalls, [])
-})
-
 test('res.end should block middleware execution', async t => {
   t.plan(4)
 
@@ -1065,6 +1033,298 @@ async function checkEncodedPath (routeUrl, requestUrl, t) {
   t.assert.deepStrictEqual(body, { slashed: true })
 }
 
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-84w6-xrf3-f8q8
+// A parameterized prefix must not be treated as literal text when rewriting a
+// RegExp mount path, otherwise the middleware is skipped and auth is bypassed.
+test('regex mount paths are rewritten with a parameterized prefix', async t => {
+  t.plan(4)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (tenant) {
+    tenant.use(/^\/private/, function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    tenant.get('/private', async () => {
+      return { secret: 'tenant-data' }
+    })
+  }, { prefix: '/tenant/:tenantId' })
+
+  const address = await instance.listen({ port: 0 })
+
+  // A non-empty parameter value must reach the middleware.
+  const noAuth = await fetch(address + '/tenant/acme/private')
+  t.assert.deepStrictEqual(noAuth.status, 403)
+
+  // An empty parameter is still routed by Fastify, so the middleware must run.
+  const emptyParam = await fetch(address + '/tenant//private')
+  t.assert.deepStrictEqual(emptyParam.status, 403)
+
+  const withAuth = await fetch(address + '/tenant/acme/private', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(withAuth.status, 200)
+  t.assert.deepStrictEqual(await withAuth.json(), { secret: 'tenant-data' })
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-84w6-xrf3-f8q8
+test('regex without anchor is rewritten with a parameterized prefix', async t => {
+  t.plan(3)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (tenant) {
+    tenant.use(/\/private/, function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    tenant.get('/private', async () => {
+      return { secret: 'tenant-data' }
+    })
+  }, { prefix: '/tenant/:tenantId' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const noAuth = await fetch(address + '/tenant/acme/private')
+  t.assert.deepStrictEqual(noAuth.status, 403)
+
+  const withAuth = await fetch(address + '/tenant/acme/private', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(withAuth.status, 200)
+  t.assert.deepStrictEqual(await withAuth.json(), { secret: 'tenant-data' })
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-84w6-xrf3-f8q8
+// An escaped colon (`::`) in a prefix maps to a single `:` in the request URL.
+test('regex mount paths with an escaped-colon prefix', async t => {
+  t.plan(2)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (child) {
+    child.use(/^\/x/, function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    child.get('/x', async () => {
+      return { ok: true }
+    })
+  }, { prefix: '/a::b' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const noAuth = await fetch(address + '/a:b/x')
+  t.assert.deepStrictEqual(noAuth.status, 403)
+
+  const withAuth = await fetch(address + '/a:b/x', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(withAuth.status, 200)
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-84w6-xrf3-f8q8
+// A custom-regex parameter keeps its constraint when rewriting a RegExp mount.
+test('regex mount paths with a custom-regex parameter prefix', async t => {
+  t.plan(3)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (user) {
+    user.use(/^\/x/, function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    user.get('/x', async () => {
+      return { ok: true }
+    })
+  }, { prefix: '/user/:id(\\d+)' })
+
+  const address = await instance.listen({ port: 0 })
+
+  // The constraint is honoured: a non-digit param is not routed by Fastify.
+  const nonDigit = await fetch(address + '/user/abc/x')
+  t.assert.deepStrictEqual(nonDigit.status, 404)
+
+  const noAuth = await fetch(address + '/user/123/x')
+  t.assert.deepStrictEqual(noAuth.status, 403)
+
+  const withAuth = await fetch(address + '/user/123/x', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(withAuth.status, 200)
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-84w6-xrf3-f8q8
+// find-my-way ignores `^` and `$` around a parameter regex, so they must not
+// end up as anchors in the middle of the rewritten mount path.
+test('regex mount paths with an anchored custom-regex parameter in the prefix', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  let middlewareCalls = 0
+  await instance.register(async function (user) {
+    user.use(/^\/x/, function (_req, res) {
+      middlewareCalls++
+      res.statusCode = 403
+      res.end('blocked by middleware')
+    })
+
+    user.get('/x', async () => ({ ok: true }))
+  }, { prefix: '/user/:id(^\\d+$)' })
+
+  t.assert.deepStrictEqual((await instance.inject('/user/abc/x')).statusCode, 404)
+  t.assert.deepStrictEqual((await instance.inject('/user/123/x')).statusCode, 403)
+  t.assert.deepStrictEqual(middlewareCalls, 1)
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-84w6-xrf3-f8q8
+// A parameter immediately followed by a static fragment is still matched.
+test('regex mount paths with a parameter followed by a static fragment', async t => {
+  t.plan(2)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (order) {
+    order.use(/^\/x/, function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    order.get('/x', async () => {
+      return { ok: true }
+    })
+  }, { prefix: '/orders/:id-edit' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const noAuth = await fetch(address + '/orders/123-edit/x')
+  t.assert.deepStrictEqual(noAuth.status, 403)
+
+  const withAuth = await fetch(address + '/orders/123-edit/x', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(withAuth.status, 200)
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-84w6-xrf3-f8q8
+// Array mount paths containing a RegExp are rewritten with a parameterized prefix.
+test('array mount paths are rewritten with a parameterized prefix', async t => {
+  t.plan(4)
+
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (tenant) {
+    tenant.use(['/private', /^\/settings/], function (req, res, next) {
+      if (req.headers.authorization !== 'Bearer secret') {
+        res.statusCode = 403
+        res.end('blocked by middleware')
+        return
+      }
+      next()
+    })
+
+    tenant.get('/private', async () => {
+      return { secret: 'tenant-data' }
+    })
+
+    tenant.get('/settings', async () => {
+      return { settings: true }
+    })
+  }, { prefix: '/tenant/:tenantId' })
+
+  const address = await instance.listen({ port: 0 })
+
+  const privateNoAuth = await fetch(address + '/tenant/acme/private')
+  t.assert.deepStrictEqual(privateNoAuth.status, 403)
+
+  const settingsNoAuth = await fetch(address + '/tenant/acme/settings')
+  t.assert.deepStrictEqual(settingsNoAuth.status, 403)
+
+  const privateWithAuth = await fetch(address + '/tenant/acme/private', {
+    headers: { authorization: 'Bearer secret' }
+  })
+  t.assert.deepStrictEqual(privateWithAuth.status, 200)
+  t.assert.deepStrictEqual(await privateWithAuth.json(), { secret: 'tenant-data' })
+})
+
+test('regex with grouped anchors is rewritten with prefix', async t => {
+  const instance = fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  const middlewareCalls = []
+
+  await instance.register(async function (child) {
+    child.use(/(?:^\/private|^\/settings)/, function (req, res) {
+      middlewareCalls.push(req.originalUrl)
+      res.statusCode = 403
+      res.end('blocked by middleware')
+    })
+
+    child.get('/private', async () => ({ ok: true }))
+    child.get('/settings', async () => ({ ok: true }))
+    child.get('/public', async () => ({ ok: true }))
+    child.get('/nested/private', async () => ({ ok: true }))
+  }, { prefix: '/admin' })
+
+  t.assert.deepStrictEqual((await instance.inject('/admin/private')).statusCode, 403)
+  t.assert.deepStrictEqual((await instance.inject('/admin/settings')).statusCode, 403)
+  t.assert.deepStrictEqual(middlewareCalls, ['/admin/private', '/admin/settings'])
+
+  // The grouped anchors still pin the match to the start of the plugin path.
+  middlewareCalls.length = 0
+  t.assert.deepStrictEqual((await instance.inject('/admin/public')).statusCode, 200)
+  t.assert.deepStrictEqual((await instance.inject('/admin/nested/private')).statusCode, 200)
+  t.assert.deepStrictEqual(middlewareCalls, [])
+})
+
 // @see https://github.com/fastify/fastify-express/security/advisories/GHSA-f44m-4qwg-5587
 test('path-scoped middleware is not skipped when the plugin prefix ends with a slash', async t => {
   t.plan(2)
@@ -1282,25 +1542,35 @@ test('regex mount paths in prefixed plugins match from the prefix, as in a mount
 })
 
 test('regex mount paths in prefixed plugins are matched in linear time', async t => {
-  const instance = fastify()
-  t.after(() => instance.close())
-  await instance.register(expressPlugin)
+  const long = 'a'.repeat(100_000)
 
-  await instance.register(async function (scope) {
-    scope.use(/.*private/, function (_req, res) {
-      res.statusCode = 401
-      res.end('blocked')
-    })
-    scope.get('/*', async () => ({ ok: true }))
-  }, { prefix: '/api' })
+  for (const [prefix, url] of [
+    ['/api', '/api/' + long],
+    ['/tenant/:id', '/tenant/acme/' + long],
+    // A long parameter must not be traded character by character with the
+    // pattern that follows it.
+    ['/tenant/:id', '/tenant/' + long + '/x']
+  ]) {
+    const instance = fastify({ routerOptions: { maxParamLength: 200_000 } })
+    t.after(() => instance.close())
+    await instance.register(expressPlugin)
 
-  // Searching for the pattern from every position after the prefix took
-  // seconds on a path this long.
-  const start = performance.now()
-  const response = await instance.inject('/api/' + 'a'.repeat(100_000))
-  const elapsed = performance.now() - start
-  t.assert.deepStrictEqual(response.statusCode, 200)
-  t.assert.ok(elapsed < 1000, `matching took ${Math.round(elapsed)} ms`)
+    await instance.register(async function (scope) {
+      scope.use(/.*private/, function (_req, res) {
+        res.statusCode = 401
+        res.end('blocked')
+      })
+      scope.get('/*', async () => ({ ok: true }))
+    }, { prefix })
+
+    // Searching for the pattern from every position after the prefix took
+    // seconds on a path this long.
+    const start = performance.now()
+    const response = await instance.inject(url)
+    const elapsed = performance.now() - start
+    t.assert.deepStrictEqual(response.statusCode, 200, prefix)
+    t.assert.ok(elapsed < 1000, `${prefix}: matching took ${Math.round(elapsed)} ms`)
+  }
 })
 
 test('escapes and character classes in regex mount paths are not rewritten', async t => {
@@ -1521,4 +1791,61 @@ test('slashless mount paths cover both the glued and the separated route', async
   t.assert.deepStrictEqual((await instance.inject('/apisecret')).statusCode, 401)
   t.assert.deepStrictEqual((await instance.inject('/api/secret/data')).statusCode, 401)
   t.assert.deepStrictEqual(middlewareCalls, 2)
+})
+
+// @see https://github.com/fastify/fastify-express/security/advisories/GHSA-84w6-xrf3-f8q8
+// Prefix segments holding a parameter match one whole segment, whatever the
+// parameter regex says, so the pattern stays valid under the `u` and `v` flags
+// and anchors inside the parameter regex cannot leak into the pattern.
+test('regex mount paths under parameterized prefixes with flags and anchored parameter regexes', async t => {
+  for (const [prefix, mount, url] of [
+    // eslint-disable-next-line prefer-regex-literals -- the parser lacks the `v` flag
+    ['/tenant/:id', new RegExp('^\\/admin', 'v'), '/tenant/t1/admin'],
+    ['/d/:date(\\d{4}\\-\\d{2})', /^\/admin/u, '/d/2024-01/admin'],
+    ['/u/:id(^\\d+$|^me$)', /^\/admin/, '/u/me/admin'],
+    ['/r/:from-:to', /^\/admin/, '/r/a-b/admin'],
+    ['/a::b/:id', /^\/admin/, '/a:b/1/admin'],
+    ['/g/:id((?:x|y)\\d+)', /^\/admin/, '/g/x1/admin']
+  ]) {
+    const label = `prefix=${prefix} use(${mount})`
+    const instance = fastify()
+    t.after(() => instance.close())
+    await instance.register(expressPlugin)
+
+    let middlewareCalls = 0
+    await instance.register(async function (scope) {
+      scope.use(mount, function (_req, res) {
+        middlewareCalls++
+        res.statusCode = 401
+        res.end('blocked')
+      })
+      scope.get('/admin', async () => ({ leaked: true }))
+      scope.get('/public', async () => ({ ok: true }))
+    }, { prefix })
+
+    t.assert.deepStrictEqual((await instance.inject(url)).statusCode, 401, label)
+    t.assert.deepStrictEqual(middlewareCalls, 1, label)
+    t.assert.deepStrictEqual((await instance.inject(url.replace(/admin$/, 'public'))).statusCode, 200, label)
+  }
+})
+
+test('regex mount paths under prefixes with many parameters in one segment do not backtrack', async t => {
+  const instance = fastify({ routerOptions: { maxParamLength: 500 } })
+  t.after(() => instance.close())
+  await instance.register(expressPlugin)
+
+  await instance.register(async function (scope) {
+    scope.use(/^\/admin/, function (_req, res) {
+      res.statusCode = 401
+      res.end('blocked')
+    })
+    scope.get('/x', async () => ({ ok: true }))
+  }, { prefix: '/t/:a-:b-:c-:d' })
+
+  const start = process.hrtime.bigint()
+  const response = await instance.inject('/t/' + '-'.repeat(500) + '-b-c-d/x')
+  const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6
+
+  t.assert.deepStrictEqual(response.statusCode, 200)
+  t.assert.ok(elapsedMs < 1000, `matcher took ${elapsedMs.toFixed(0)}ms`)
 })
