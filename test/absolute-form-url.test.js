@@ -11,7 +11,10 @@ function requestTarget (address, target, method = 'GET') {
 
   return new Promise((resolve, reject) => {
     const socket = net.createConnection({ host: hostname, port }, () => {
-      socket.end(`${method} ${target} HTTP/1.1\r\nHost: ${hostname}:${port}\r\nConnection: close\r\n\r\n`)
+      // Do not half-close the connection: Node.js aborts a request still in
+      // flight when the client ends its side, so its response would be lost.
+      // The server closes the connection after responding (Connection: close).
+      socket.write(`${method} ${target} HTTP/1.1\r\nHost: ${hostname}:${port}\r\nConnection: close\r\n\r\n`)
     })
 
     let response = ''
@@ -71,7 +74,7 @@ test('absolute-form targets do not bypass path-scoped middleware', async t => {
   t.assert.deepStrictEqual(seen, [
     { url: '/admin/dashboard', originalUrl: targets[0] },
     { url: '/admin/dashboard', originalUrl: targets[1] },
-    { url: '/admin/dashboard?test=value', originalUrl: targets[2] },
+    { url: '/admin/dashboard?test=%76alue', originalUrl: targets[2] },
     { url: '/admin/dashboard', originalUrl: targets[3] },
     { url: '/admin/dashboard?bypass', originalUrl: targets[4] }
   ])
@@ -137,7 +140,52 @@ test('absolute-form targets without a path resolve to root and preserve the quer
   t.assert.strictEqual((await requestTarget(address, 'http://example.test')).statusCode, 200)
   t.assert.strictEqual((await requestTarget(address, 'http://example.test?next=/admin&x=%76alue')).statusCode, 200)
   t.assert.strictEqual((await requestTarget(address, '*', 'OPTIONS')).statusCode, 200)
-  t.assert.deepStrictEqual(seen, ['/', '/?next=/admin&x=value', '*'])
+  t.assert.deepStrictEqual(seen, ['/', '/?next=/admin&x=%76alue', '/'])
+})
+
+test('request targets that do not start with a slash do not bypass path-scoped middleware', async t => {
+  const instance = Fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  const deny = (req, res) => {
+    res.statusCode = 403
+    res.end('blocked')
+  }
+  instance.use('/admin', deny)
+  instance.use('/tenant/:id/admin', deny)
+  instance.get('/admin', async () => ({ secret: 'classified' }))
+  instance.get('/admin/:id', async () => ({ secret: 'classified' }))
+  instance.get('/tenant/:id/admin', async () => ({ secret: 'classified' }))
+
+  const address = await instance.listen({ port: 0, host: '127.0.0.1' })
+
+  for (const target of ['*admin', '*admin/42', '*tenant/x/admin']) {
+    const response = await requestTarget(address, target)
+    t.assert.strictEqual(response.statusCode, 400, target)
+  }
+})
+
+test('the asterisk-form request target is matched as the root path', async t => {
+  const instance = Fastify()
+  t.after(() => instance.close())
+
+  await instance.register(expressPlugin)
+
+  instance.use(/^\/$/, (req, res) => {
+    res.statusCode = 403
+    res.end('blocked')
+  })
+  instance.get('/', async () => ({ secret: 'classified' }))
+  instance.options('/', async () => ({ secret: 'classified' }))
+
+  const address = await instance.listen({ port: 0, host: '127.0.0.1' })
+
+  for (const method of ['GET', 'OPTIONS']) {
+    const response = await requestTarget(address, '*', method)
+    t.assert.strictEqual(response.statusCode, 403, method)
+  }
 })
 
 test('malformed request targets are rejected without affecting later requests', async t => {
@@ -175,7 +223,7 @@ test('malformed request targets are rejected without affecting later requests', 
     t.assert.strictEqual(response.statusCode, 400, target)
   }
 
-  for (const target of ['http:///admin', '/admin?value=%zz']) {
+  for (const target of ['http:///admin', '/admin?value=%zz', '*admin']) {
     const response = await instance.inject({
       method: 'GET',
       url: '/admin',

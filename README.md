@@ -128,6 +128,8 @@ me@computer ~ % curl -X PATCH -H 'content-type:application/json' -d '{"foo2":"ba
 
 The encapsulation works as usual with Fastify, you can register the plugin in a subsystem and your express code will work only inside there, or you can declare the express plugin top level and register a middleware in a nested plugin, and the middleware will be executed only for the nested routes of the specific plugin.
 
+As with Fastify hooks, a middleware also runs for the routes of the plugins already registered in the instance where `use()` is called, for example after `await fastify.register(plugin)`.
+
 *Register the plugin in its own subsystem:*
 ```js
 const fastify = require('fastify')()
@@ -207,9 +209,21 @@ async function subsystem (fastify, opts) {
 ```
 
 > **Note:** In prefixed plugins, `@fastify/express` rewrites string, array, and
-> RegExp mount paths to include the prefix. RegExp paths with `^` anchors inside
-> groups (e.g., `/(?:^\/a|^\/b)/`) are not rewritten correctly. Use array paths
-> instead: `fastify.use(['/a', '/b'], middleware)`.
+> RegExp mount paths to include the prefix. A RegExp path is matched against
+> the rest of the URL after the prefix, as Express does for a mounted router:
+> Express only runs a RegExp mount whose match starts the path, so the pattern
+> must match from the end of the prefix, whether or not it starts with `^`, and
+> a `^` inside a group (e.g., `/(?:^\/a|^\/b)/`) also anchors there. The `g` and
+> `y` flags are dropped from RegExp mount paths, since they make matching stateful.
+
+> **Note:** With case-insensitive routing (`routerOptions.caseSensitive: false`),
+> the request path is lowercased while Express matches path-scoped middleware,
+> to mirror the router. Two consequences: middleware sees the lowercased path in
+> `req.url` and in Express `req.params` (the original is kept on
+> `req.originalUrl`, and route handlers see the original spelling), so avoid
+> relying on case-sensitive path data in middleware in this mode, for example
+> `serveStatic` on a case-sensitive filesystem; and `RegExp` mount paths are
+> matched case-insensitively (the `i` flag is added), as string mount paths are.
 
 ### Wrap Express req in Proxy
 

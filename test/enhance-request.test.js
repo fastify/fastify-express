@@ -57,23 +57,30 @@ test('trust proxy protocol', async (t) => {
 })
 
 test('query params still in in the request url after decodeURI', async (t) => {
-  t.plan(2)
   const fastify = Fastify()
 
   t.after(() => fastify.close())
 
+  // Record what the middleware sees and assert afterwards: Express would
+  // swallow an assertion thrown inside the middleware.
+  let seen
   fastify.register(expressPlugin).after(() => {
-    fastify.use('/admin', function (req, res) {
-      t.assert.deepStrictEqual(req.originalUrl, '/%61dmin?test=%76alue&test2=%76alue', 'originalUrl is not decoded')
-      t.assert.deepStrictEqual(req.url, '/admin?test=value&test2=value', 'url is decoded')
-
+    fastify.use(function (req, res) {
+      seen = { originalUrl: req.originalUrl, url: req.url, query: { ...req.query } }
       res.sendStatus(200)
     })
   })
 
   const address = await fastify.listen({ port: 0 })
 
-  await fetch(`${address}/%61dmin?test=%76alue&test2=%76alue`)
+  const response = await fetch(`${address}/%61dmin?test=%76alue&test2=%76alue`)
+  t.assert.strictEqual(response.status, 200)
+  t.assert.deepStrictEqual(seen, {
+    originalUrl: '/%61dmin?test=%76alue&test2=%76alue',
+    // Only the path is decoded; the query string is decoded once, by Express.
+    url: '/admin?test=%76alue&test2=%76alue',
+    query: { test: 'value', test2: 'value' }
+  })
 })
 
 test('passing createProxyHandler sets up a Proxy with Express req', async t => {
@@ -181,4 +188,48 @@ test('createProxyHandler has access to Fastify request object', async t => {
   t.assert.deepStrictEqual(response.status, 200)
   t.assert.deepStrictEqual(response.headers.get('content-length'), '' + responseText.length)
   t.assert.deepStrictEqual(JSON.parse(responseText), { hello: 'world' })
+})
+
+test('createProxyHandler keeps the original request on the response', async t => {
+  t.plan(5)
+
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  let rawRequest
+  fastify.register(expressPlugin, {
+    createProxyHandler: fastifyReq => {
+      rawRequest = fastifyReq.raw
+      return {}
+    }
+  })
+    .after(() => {
+      fastify.use(function (req, res, next) {
+        // Express still works with the Proxy while it handles the request
+        t.assert.notStrictEqual(req, rawRequest)
+        t.assert.strictEqual(res.req, req)
+        next()
+      })
+    })
+
+  // Node.js reads `res.req` when the response finishes and expects the
+  // request it created there, not the Proxy that Express assigned
+  const finished = new Promise(resolve => {
+    fastify.addHook('onResponse', function (_request, reply, done) {
+      resolve(reply.raw.req)
+      done()
+    })
+  })
+
+  fastify.get('/', function (_request, reply) {
+    reply.send({ hello: 'world' })
+  })
+
+  const address = await fastify.listen({ port: 0 })
+
+  const response = await fetch(address)
+
+  t.assert.deepStrictEqual(response.status, 200)
+  t.assert.deepStrictEqual(await response.json(), { hello: 'world' })
+  t.assert.strictEqual(await finished, rawRequest)
 })
