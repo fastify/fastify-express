@@ -216,6 +216,28 @@ async function subsystem (fastify, opts) {
 > a `^` inside a group (e.g., `/(?:^\/a|^\/b)/`) also anchors there. The `g` and
 > `y` flags are dropped from RegExp mount paths, since they make matching stateful.
 
+> **Note:** A middleware passed to `use()` without a path, such as an Express
+> `Router`, is not mounted at the prefix of a prefixed plugin: it sees the whole
+> URL, prefix included, so `router.use('/admin', auth)` does not run for
+> `/v1/admin` in a plugin registered with `{ prefix: '/v1' }`. To make the
+> paths in the router relative to the prefix, like the routes of the plugin,
+> pass `'/'` as the path: `fastify.use('/', router)`.
+
+> **Note:** Mount paths use the Express path syntax, which differs from the
+> Fastify route syntax. In a mount path a parameter name ends at the first
+> character that cannot be part of an identifier, while in a Fastify route it
+> ends only at `/`, `-`, `.` or `(`. For example, `/map/:lat,:lng` has two
+> parameters in a mount path but a single one, named `lat,:lng`, in a Fastify
+> route, so a middleware mounted there does not run for `/map/anything`, which
+> the route matches. Separate parameters with `/`, `-` or `.` in paths used for
+> both.
+
+> **Note:** With `routerOptions.ignoreTrailingSlash`, `/admin/` is routed to the
+> `/admin` route, but Express matches mount paths against the URL as sent. A
+> string mount path matches both, but a `RegExp` mount path anchored with `$`,
+> such as `/^\/admin$/`, does not match `/admin/`, as in Express. End the
+> pattern with `(?=\/|$)` instead, as in `/^\/admin(?=\/|$)/`.
+
 > **Note:** With case-insensitive routing (`routerOptions.caseSensitive: false`),
 > the request path is lowercased while Express matches path-scoped middleware,
 > to mirror the router. Two consequences: middleware sees the lowercased path in
