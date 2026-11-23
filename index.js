@@ -31,7 +31,10 @@ function fastifyExpress (fastify, options, next) {
     .addHook(expressHook, runConnect)
     .addHook('onRegister', onRegister)
 
-  function use (path, fn) {
+  function use (path, ...handlers) {
+    // Like Express, accept several middleware after the path, which Express
+    // also accepts as an array.
+    const fn = handlers.length > 1 ? handlers : handlers[0]
     // With ignoreDuplicateSlashes the router collapses repeated slashes in the
     // routes it registers and in the request URL (see normalizeUrl), so mount
     // paths must be collapsed too or they can never match.
