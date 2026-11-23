@@ -155,6 +155,36 @@ async function subsystem (fastify, opts) {
 }
 ```
 
+#### Express routes inside a plugin
+
+A middleware registered in a plugin runs only for the requests that Fastify routes to that plugin: its own routes and its own not-found handler. A route that exists only in Express, such as one defined in an Express app or router passed to `use()`, matches no Fastify route, so Fastify sends the request to the not-found handler of the root instance and the plugin's Express code never runs.
+
+To serve Express routes from a plugin, give the plugin a prefix and its own not-found handler:
+
+```js
+const fastify = require('fastify')()
+const express = require('express')
+
+const app = express()
+app.get('/hello', (req, res) => {
+  res.json({ hello: 'world' })
+})
+
+await fastify.register(require('@fastify/express'))
+
+fastify.register(async function (instance) {
+  instance.use('/', app)
+  instance.setNotFoundHandler((request, reply) => {
+    reply.code(404).send({ message: 'Not found' })
+  })
+}, { prefix: '/legacy' })
+```
+
+`GET /legacy/hello` is answered by Express, and any other URL under `/legacy` that Express does not handle goes to the plugin's not-found handler.
+
+- Mount the app with `instance.use('/', app)`, not `instance.use(app)`: only an explicit path gets the plugin prefix, so with `use(app)` Express sees `/legacy/hello` and the app's `/hello` route does not match.
+- The prefix is required. A plugin without a prefix shares the not-found handler of the root instance, so it cannot set its own when the root (or another plugin without a prefix) already has one. To serve Express routes without a prefix, call `use()` on the root instance instead.
+
 ### Hooks and middleware
 
 Every registered middleware will be run during the `onRequest` hook phase, so the registration order is important.
