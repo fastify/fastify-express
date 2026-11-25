@@ -35,6 +35,11 @@ function fastifyExpress (fastify, options, next) {
     // Like Express, accept several middleware after the path, which Express
     // also accepts as an array.
     const fn = handlers.length > 1 ? handlers : handlers[0]
+    // Express flattens nested arrays of mount paths, so every path in them must
+    // be rewritten below.
+    if (Array.isArray(path)) {
+      path = path.flat(Infinity)
+    }
     // With ignoreDuplicateSlashes the router collapses repeated slashes in the
     // routes it registers and in the request URL (see normalizeUrl), so mount
     // paths must be collapsed too or they can never match.
