@@ -354,7 +354,10 @@ function normalizeUrl (url, options) {
 // these characters to the legacy url.parse(). That parser rewrites `\` to `/`,
 // so Express would match mount paths against a different path from the one
 // Fastify routed. Percent-encoding them keeps parseurl on its fast path.
-const PARSEURL_FALLBACK_CHARS = /[\t\n\f\r #\u00a0\ufeff]/g
+// U+2028 and U+2029 are encoded too: a regular expression treats them as line
+// terminators, so `.`, `^` and `$` in a RegExp mount path would match them
+// differently from the percent-encoded form plain Express sees.
+const PARSEURL_FALLBACK_CHARS = /[\t\n\f\r #\u00a0\ufeff\u2028\u2029]/g
 
 function encodeParseurlFallbackChars (url) {
   return url.replace(PARSEURL_FALLBACK_CHARS, encodeURIComponent)
