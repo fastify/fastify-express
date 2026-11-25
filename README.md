@@ -274,8 +274,14 @@ async function subsystem (fastify, opts) {
 > `req.url` and in Express `req.params` (the original is kept on
 > `req.originalUrl`, and route handlers see the original spelling), so avoid
 > relying on case-sensitive path data in middleware in this mode, for example
-> `serveStatic` on a case-sensitive filesystem; and `RegExp` mount paths are
-> matched case-insensitively (the `i` flag is added), as string mount paths are.
+> `serveStatic` on a case-sensitive filesystem; and mount paths match every
+> spelling: the text of a string mount path is lowercased as the request path
+> is (parameter names keep their case), and `RegExp` mount paths are matched
+> case-insensitively (the `i` flag is added). A matcher that still matches
+> case-sensitively, such as a `RegExp` mount path without the `i` flag or a
+> `Router({ caseSensitive: true })` inside an Express application passed to
+> `use()`, would skip the request, so a request it would match in the route's
+> own spelling fails with a 500 instead.
 
 ### Wrap Express req in Proxy
 

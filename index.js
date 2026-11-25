@@ -3,7 +3,7 @@
 const fp = require('fastify-plugin')
 const Express = require('express')
 const parseUrl = require('parseurl')
-const { parse, pathToRegexp } = require('path-to-regexp')
+const { parse, pathToRegexp, stringify, TokenData } = require('path-to-regexp')
 const kMiddlewares = Symbol('fastify-express-middlewares')
 const kDynamicMountMatchers = Symbol('fastify-express-dynamic-mount-matchers')
 const kChildren = Symbol('fastify-express-children')
@@ -40,6 +40,11 @@ function fastifyExpress (fastify, options, next) {
     // Like Express, accept several middleware after the path, which Express
     // also accepts as an array.
     const fn = handlers.length > 1 ? handlers : handlers[0]
+    // Express flattens nested arrays of mount paths, so every path in them must
+    // be rewritten below.
+    if (Array.isArray(path)) {
+      path = path.flat(Infinity)
+    }
     // With ignoreDuplicateSlashes the router collapses repeated slashes in the
     // routes it registers and in the request URL (see normalizeUrl), so mount
     // paths must be collapsed too or they can never match.
@@ -53,10 +58,10 @@ function fastifyExpress (fastify, options, next) {
     }
 
     if (caseSensitive === false) {
-      // The request path is lowercased to mirror the router (see normalizeUrl),
-      // so a RegExp mount path, and the plugin prefix rewritten into it, must
-      // match case-insensitively or it would never match an uppercase spelling.
-      path = Array.isArray(path) ? path.map(foldRegExp) : foldRegExp(path)
+      // The request path is lowercased to mirror the router (see
+      // enhanceRequest), so a mount path, and the plugin prefix rewritten into
+      // it, must match it whatever the spelling of the request (see foldMountPath).
+      path = Array.isArray(path) ? path.map(foldMountPath) : foldMountPath(path)
     }
     addMiddleware(this, path, fn)
     return this
@@ -67,11 +72,7 @@ function fastifyExpress (fastify, options, next) {
   function addMiddleware (instance, path, fn) {
     instance[kMiddlewares].push([path, fn])
     instance[kDynamicMountMatchers].push(...compileDynamicMountMatchers(path))
-    if (fn == null) {
-      instance.express.use(path)
-    } else {
-      instance.express.use(path, fn)
-    }
+    expressUse(instance.express, path, fn)
     for (const child of instance[kChildren]) {
       addMiddleware(child, path, fn)
     }
@@ -159,9 +160,19 @@ function fastifyExpress (fastify, options, next) {
     // ambiguous requests. Only a route with parameters or a wildcard can take
     // the empty segment: a static route (e.g. `/users/` next to a
     // `/users/:id` mount) is not covered by the mount, as in Express.
-    if (isDynamicRoute(req.routeOptions.url) && hasAmbiguousDynamicMount(this[kDynamicMountMatchers], req.raw)) {
+    if (isDynamicRoute(req.routeOptions.url) && (
+      hasAmbiguousDynamicMount(this[kDynamicMountMatchers], req.raw) ||
+      hasAmbiguousNestedMount(this.express, req)
+    )) {
       const error = new Error('Invalid route parameter')
       error.statusCode = 400
+      next(error)
+      return
+    }
+
+    if (caseSensitive === false && req.routeOptions.url !== undefined && hasCaseSensitiveMount(this.express, req)) {
+      const error = new Error('Express middleware matches this path case-sensitively')
+      error.statusCode = 500
       next(error)
       return
     }
@@ -205,12 +216,46 @@ function fastifyExpress (fastify, options, next) {
     instance.express.disable('x-powered-by')
     instance.decorate('use', use)
     for (const [path, fn] of middlewares) {
-      if (fn == null) {
-        instance.express.use(path)
-      } else {
-        instance.express.use(path, fn)
-      }
+      expressUse(instance.express, path, fn)
     }
+  }
+
+  // Express Routers and applications passed to use() match their own mount
+  // paths, which compileDynamicMountMatchers cannot see. A request with an
+  // empty parameter or wildcard value is ambiguous when one of them would
+  // match the route's path with that value filled in, but not the request.
+  function hasAmbiguousNestedMount (app, req) {
+    if (!Object.values(req.params).includes('')) {
+      return false
+    }
+
+    const path = parseUrl(req.raw).pathname
+    return ['a', '1'].some(placeholder => {
+      let filled = spellRoutePath(req.routeOptions.url, req.params, placeholder)
+      if (ignoreDuplicateSlashes) {
+        filled = removeDuplicateSlashes(filled)
+      }
+      if (caseSensitive === false) {
+        filled = foldPath(filled)
+      }
+      return hasHiddenMount(app.router.stack, path, filled, true)
+    })
+  }
+
+  // With case-insensitive routing, a matcher inside an Express Router or
+  // application can still match case-sensitively (a RegExp mount path without
+  // the `i` flag, `Router({ caseSensitive: true })`, `case sensitive routing`),
+  // and the `i` flag of a RegExp does not fold some characters as
+  // toLowerCase() does. Such a matcher would skip the request whatever its
+  // spelling, since Express is handed the lowercased path, so look for one
+  // that matches the route's own spelling but not its lowercased spelling.
+  function hasCaseSensitiveMount (app, req) {
+    let spelled = spellRoutePath(req.routeOptions.url, req.params, '')
+    if (ignoreDuplicateSlashes) {
+      spelled = removeDuplicateSlashes(spelled)
+    }
+    const folded = foldPath(spelled)
+    return spelled !== folded && hasHiddenMount(app.router.stack, folded, spelled, false)
   }
 
   next()
@@ -316,6 +361,203 @@ function fillEmptySegments (path) {
     .join('/')
 }
 
+// Express wraps an application mounted with use() in a closure, so remember
+// which application each wrapper runs (see innerStack).
+const mountedApps = new WeakMap()
+
+function expressUse (app, path, fn) {
+  const stack = app.router.stack
+  const start = stack.length
+  if (fn == null) {
+    app.use(path)
+  } else {
+    app.use(path, fn)
+  }
+
+  // Express adds one layer per middleware, in order, and takes the first
+  // argument for one when it is a function or an array that starts with one.
+  let first = path
+  while (Array.isArray(first) && first.length > 0) {
+    first = first[0]
+  }
+  const handles = (typeof first === 'function' ? [path, fn] : [fn])
+    .flat(Infinity)
+    .filter(handle => handle != null)
+  handles.forEach((handle, i) => {
+    if (isExpressApp(handle)) {
+      mountedApps.set(stack[start + i].handle, handle)
+    }
+  })
+}
+
+function isExpressApp (handle) {
+  return typeof handle.handle === 'function' && typeof handle.set === 'function'
+}
+
+// Whether a layer of an Express router stack, or of a Router or application
+// mounted in it, matches `expected` but not `path`, the path Express is
+// handed. Layers are matched as Express matches them, but without the side
+// effects of Layer#match. `opaque` is the answer for an application that
+// cannot be looked into.
+function hasHiddenMount (stack, path, expected, opaque) {
+  for (const layer of stack) {
+    // An error-handling middleware does not run for the request.
+    if (layer.handle.length === 4) {
+      continue
+    }
+
+    const expectedMatch = matchLayer(layer, expected)
+    if (expectedMatch === null) {
+      continue
+    }
+    const match = matchLayer(layer, path)
+    if (match === null) {
+      return true
+    }
+
+    const inner = layer.route === undefined ? innerStack(layer.handle) : null
+    // An application mounted inside another one cannot be looked into.
+    if (inner === kOpaque) {
+      if (opaque) {
+        return true
+      }
+      continue
+    }
+    if (inner !== null && hasHiddenMount(inner, trimPath(path, match), trimPath(expected, expectedMatch), opaque)) {
+      return true
+    }
+  }
+  return false
+}
+
+// The part of `path` a layer consumes, or null when Express would skip it.
+function matchLayer (layer, path) {
+  // A Router or application from Express 4, which an application can pass to
+  // use(), has layers of its own kind.
+  if (layer.matchers === undefined) {
+    return matchExpress4Layer(layer, path)
+  }
+
+  if (layer.slash) {
+    return ''
+  }
+
+  let match = false
+  for (let i = 0; !match && i < layer.matchers.length; i++) {
+    match = layer.matchers[i](path)
+  }
+  if (!match) {
+    return null
+  }
+  return isMountPrefix(layer, path, match.path, '/') ? match.path : null
+}
+
+function matchExpress4Layer (layer, path) {
+  const { regexp } = layer
+  if (regexp.fast_slash) {
+    return ''
+  }
+  if (regexp.fast_star) {
+    return path
+  }
+
+  const match = regexp.exec(path)
+  if (match === null) {
+    return null
+  }
+  // Express 4 also lets a mount end at a dot.
+  return isMountPrefix(layer, path, match[0], '/.') ? match[0] : null
+}
+
+// A mount must match a prefix of the path that ends at a separator.
+function isMountPrefix (layer, path, matched, separators) {
+  return layer.route !== undefined || (
+    path.startsWith(matched) &&
+    (path.length === matched.length || separators.includes(path[matched.length]))
+  )
+}
+
+// The path a Router or application mounted at `prefix` matches its own layers
+// against: Express strips the prefix and keeps a leading slash.
+function trimPath (path, prefix) {
+  const rest = path.slice(prefix.length)
+  return rest[0] === '/' ? rest : '/' + rest
+}
+
+const kOpaque = Symbol('fastify-express-opaque')
+
+function innerStack (handle) {
+  const app = mountedApps.get(handle) ?? handle
+  if (Array.isArray(app.stack)) {
+    return app.stack
+  }
+  if (isExpressApp(app)) {
+    // Express 4 creates the router of an application on first use, as
+    // `_router`, and throws on `router`.
+    if (typeof app.lazyrouter === 'function') {
+      return app._router?.stack ?? []
+    }
+    return app.router.stack
+  }
+  return handle.name === 'mounted_app' ? kOpaque : null
+}
+
+// Spell the path of a Fastify route the way normalizeUrl() spells a request
+// for it, giving each parameter and wildcard its value, or `placeholder`
+// when the value is empty.
+function spellRoutePath (url, params, placeholder) {
+  let path = ''
+  for (let i = 0; i < url.length; i++) {
+    if (url[i] === ':' && url[i + 1] === ':') {
+      // `::` is a literal colon in find-my-way.
+      path += ':'
+      i++
+    } else if (url[i] === ':') {
+      // find-my-way ends a parameter name at `(`, `-`, `.` or `/`, and an
+      // optional parameter is marked with a trailing `?`.
+      let end = i + 1
+      while (end < url.length && !'(-./'.includes(url[end])) {
+        end++
+      }
+      const name = url.slice(i + 1, end).replace(/\?$/, '')
+      if (url[end] === '(') {
+        end = closingParenthesis(url, end)
+      }
+      path += spellParam(params[name], placeholder, /[%/?#;]/g)
+      i = end - 1
+    } else if (url[i] === '*') {
+      // A wildcard value spans segments, so its slashes stay as they are.
+      path += spellParam(params['*'], placeholder, /[%?#;]/g)
+    } else {
+      path += encodeMountPath(url[i])
+    }
+  }
+  return path
+}
+
+// The index after the parenthesis closing the regular expression of a
+// parameter, which starts at `start`.
+function closingParenthesis (url, start) {
+  let depth = 0
+  let i = start
+  for (; i < url.length; i++) {
+    if (url[i] === '\\') {
+      i++
+    } else if (url[i] === '(') {
+      depth++
+    } else if (url[i] === ')' && --depth === 0) {
+      break
+    }
+  }
+  return i + 1
+}
+
+// A parameter value as normalizeUrl() leaves it: decoded, except for the
+// characters that would end the path or the segment.
+function spellParam (value, placeholder, reserved) {
+  return value ? encodeParseurlFallbackChars(value.replace(reserved, encodeURIComponent)) : placeholder
+}
+
 function normalizeUrl (url, options) {
   const {
     ignoreDuplicateSlashes,
@@ -359,7 +601,10 @@ function normalizeUrl (url, options) {
 // these characters to the legacy url.parse(). That parser rewrites `\` to `/`,
 // so Express would match mount paths against a different path from the one
 // Fastify routed. Percent-encoding them keeps parseurl on its fast path.
-const PARSEURL_FALLBACK_CHARS = /[\t\n\f\r #\u00a0\ufeff]/g
+// U+2028 and U+2029 are encoded too: a regular expression treats them as line
+// terminators, so `.`, `^` and `$` in a RegExp mount path would match them
+// differently from the percent-encoded form plain Express sees.
+const PARSEURL_FALLBACK_CHARS = /[\t\n\f\r #\u00a0\ufeff\u2028\u2029]/g
 
 function encodeParseurlFallbackChars (url) {
   return url.replace(PARSEURL_FALLBACK_CHARS, encodeURIComponent)
@@ -429,8 +674,31 @@ function splitPathAndQuery (url, useSemicolonDelimiter) {
   }
 }
 
-function foldRegExp (p) {
-  return p instanceof RegExp && !p.flags.includes('i') ? new RegExp(p.source, p.flags + 'i') : p
+// Express matches a string mount path with the `i` flag, which does not fold
+// every character as toLowerCase() folds the request path (`İ` becomes `i̇`,
+// `ẞ` becomes `ß`), so lowercase the literal text of the mount path the same
+// way. Parameter names keep their case, since they name the values in
+// req.params. A RegExp mount path gets the `i` flag.
+function foldMountPath (p) {
+  if (p instanceof RegExp) {
+    return p.flags.includes('i') ? p : new RegExp(p.source, p.flags + 'i')
+  }
+  if (typeof p !== 'string') {
+    return p
+  }
+  return stringify(new TokenData(foldTokens(parse(p).tokens), p))
+}
+
+function foldTokens (tokens) {
+  return tokens.map(token => {
+    if (token.type === 'text') {
+      return { ...token, value: token.value.toLowerCase() }
+    }
+    if (token.type === 'group') {
+      return { ...token, tokens: foldTokens(token.tokens) }
+    }
+    return token
+  })
 }
 
 function removeDuplicateSlashes (path) {
@@ -444,10 +712,15 @@ function joinPrefix (prefix, path) {
   // yields a mount path that can never match (e.g. `/api//secret` from
   // `/api/` + `/secret`, or `/apisecret` from `/api` + `secret`), letting
   // auth middlewares be silently skipped.
-  if ((path === '/' && prefix.length > 0) || (path[0] === '/' && prefix.endsWith('/'))) {
-    // The prefix already supplies the separator; drop the path's leading slash.
-    path = path.slice(1)
-  } else if (path[0] !== '/' && !prefix.endsWith('/')) {
+  // An Express path may start with an optional group holding the slash
+  // (`{/:lang}/admin`), which is as slash-led as `/admin`.
+  const slashLed = path[0] === '/' || path.startsWith('{/')
+  if (path === '/' && prefix.length > 0) {
+    path = ''
+  } else if (slashLed && prefix.endsWith('/')) {
+    // The path supplies the separator; drop the prefix's trailing slash.
+    return prefix.slice(0, -1) + path
+  } else if (!slashLed && !prefix.endsWith('/')) {
     // A mount path with no leading slash would otherwise glue onto the prefix
     // (`/api` + `secret` => `/apisecret`) and never match a slash-led route.
     // Fastify serves a slashless route at exactly that glued path, though, so
