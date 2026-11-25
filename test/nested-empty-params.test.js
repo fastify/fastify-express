@@ -4,6 +4,7 @@ const net = require('node:net')
 const { test } = require('node:test')
 const Fastify = require('fastify')
 const express = require('express')
+const express4 = require('express4')
 
 const expressPlugin = require('../index')
 
@@ -251,5 +252,48 @@ test('empty values reach routes when an application follows another middleware',
     ['/teams/core/admin', 401],
     ['/teams//admin', 400],
     ['/users/', 200]
+  ])
+})
+
+test('empty values do not bypass dynamic mounts inside an Express 4 Router or application', async t => {
+  const instance = Fastify()
+  t.after(() => instance.close())
+  await instance.register(expressPlugin)
+
+  // An application can pass a Router or application from its own Express 4,
+  // whose layers differ from those of Express 5.
+  const router = express4.Router()
+  router.use('*', (_req, _res, next) => next())
+  router.use('/tenants/:tenant/admin', deny)
+  // Express 4 also runs a mount whose match ends at a dot.
+  router.use(/^\/images\/[^/.]+/, deny)
+  // It still does not run one whose match ends elsewhere.
+  router.use(/^\/x/, deny)
+  router.get('/express/:id', (_req, res) => res.end('express'))
+  instance.use(router)
+
+  const app = express4()
+  app.use('/teams/:team/admin', deny)
+  instance.use(app)
+  // An application that has no middleware or routes has no router yet.
+  instance.use(express4())
+
+  instance.get('/tenants/:id/admin', async () => ({ secret: true }))
+  instance.get('/images/:name.png', async () => ({ secret: true }))
+  instance.get('/teams/:id/admin', async () => ({ secret: true }))
+  instance.get('/users/:id', async () => ({ ok: true }))
+  instance.get('/xy/:id', async () => ({ ok: true }))
+
+  await check(t, instance, [
+    ['/tenants/acme/admin', 401],
+    ['/tenants//admin', 400],
+    ['/images/logo.png', 401],
+    ['/images/.png', 400],
+    ['/teams/core/admin', 401],
+    ['/teams//admin', 400],
+    ['/users/', 200],
+    ['/xy/1', 200],
+    ['/xy/', 200],
+    ['/express/1', 200]
   ])
 })

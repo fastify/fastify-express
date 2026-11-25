@@ -393,6 +393,12 @@ function hasHiddenMount (stack, path, expected) {
 
 // The part of `path` a layer consumes, or null when Express would skip it.
 function matchLayer (layer, path) {
+  // A Router or application from Express 4, which an application can pass to
+  // use(), has layers of its own kind.
+  if (layer.matchers === undefined) {
+    return matchExpress4Layer(layer, path)
+  }
+
   if (layer.slash) {
     return ''
   }
@@ -404,15 +410,32 @@ function matchLayer (layer, path) {
   if (!match) {
     return null
   }
+  return isMountPrefix(layer, path, match.path, '/') ? match.path : null
+}
 
-  // A mount must match a prefix of the path that ends at a slash.
-  if (layer.route === undefined && (
-    !path.startsWith(match.path) ||
-    (path.length > match.path.length && path[match.path.length] !== '/')
-  )) {
+function matchExpress4Layer (layer, path) {
+  const { regexp } = layer
+  if (regexp.fast_slash) {
+    return ''
+  }
+  if (regexp.fast_star) {
+    return path
+  }
+
+  const match = regexp.exec(path)
+  if (match === null) {
     return null
   }
-  return match.path
+  // Express 4 also lets a mount end at a dot.
+  return isMountPrefix(layer, path, match[0], '/.') ? match[0] : null
+}
+
+// A mount must match a prefix of the path that ends at a separator.
+function isMountPrefix (layer, path, matched, separators) {
+  return layer.route !== undefined || (
+    path.startsWith(matched) &&
+    (path.length === matched.length || separators.includes(path[matched.length]))
+  )
 }
 
 // The path a Router or application mounted at `prefix` matches its own layers
@@ -430,6 +453,11 @@ function innerStack (handle) {
     return app.stack
   }
   if (isExpressApp(app)) {
+    // Express 4 creates the router of an application on first use, as
+    // `_router`, and throws on `router`.
+    if (typeof app.lazyrouter === 'function') {
+      return app._router?.stack ?? []
+    }
     return app.router.stack
   }
   return handle.name === 'mounted_app' ? kOpaque : null
