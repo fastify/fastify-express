@@ -447,10 +447,15 @@ function joinPrefix (prefix, path) {
   // yields a mount path that can never match (e.g. `/api//secret` from
   // `/api/` + `/secret`, or `/apisecret` from `/api` + `secret`), letting
   // auth middlewares be silently skipped.
-  if ((path === '/' && prefix.length > 0) || (path[0] === '/' && prefix.endsWith('/'))) {
-    // The prefix already supplies the separator; drop the path's leading slash.
-    path = path.slice(1)
-  } else if (path[0] !== '/' && !prefix.endsWith('/')) {
+  // An Express path may start with an optional group holding the slash
+  // (`{/:lang}/admin`), which is as slash-led as `/admin`.
+  const slashLed = path[0] === '/' || path.startsWith('{/')
+  if (path === '/' && prefix.length > 0) {
+    path = ''
+  } else if (slashLed && prefix.endsWith('/')) {
+    // The path supplies the separator; drop the prefix's trailing slash.
+    return prefix.slice(0, -1) + path
+  } else if (!slashLed && !prefix.endsWith('/')) {
     // A mount path with no leading slash would otherwise glue onto the prefix
     // (`/api` + `secret` => `/apisecret`) and never match a slash-led route.
     // Fastify serves a slashless route at exactly that glued path, though, so
