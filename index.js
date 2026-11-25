@@ -3,7 +3,7 @@
 const fp = require('fastify-plugin')
 const Express = require('express')
 const parseUrl = require('parseurl')
-const { parse, pathToRegexp } = require('path-to-regexp')
+const { parse, pathToRegexp, stringify, TokenData } = require('path-to-regexp')
 const kMiddlewares = Symbol('fastify-express-middlewares')
 const kDynamicMountMatchers = Symbol('fastify-express-dynamic-mount-matchers')
 const kChildren = Symbol('fastify-express-children')
@@ -53,10 +53,10 @@ function fastifyExpress (fastify, options, next) {
     }
 
     if (caseSensitive === false) {
-      // The request path is lowercased to mirror the router (see normalizeUrl),
-      // so a RegExp mount path, and the plugin prefix rewritten into it, must
-      // match case-insensitively or it would never match an uppercase spelling.
-      path = Array.isArray(path) ? path.map(foldRegExp) : foldRegExp(path)
+      // The request path is lowercased to mirror the router (see
+      // enhanceRequest), so a mount path, and the plugin prefix rewritten into
+      // it, must match it whatever the spelling of the request (see foldMountPath).
+      path = Array.isArray(path) ? path.map(foldMountPath) : foldMountPath(path)
     }
     addMiddleware(this, path, fn)
     return this
@@ -165,6 +165,13 @@ function fastifyExpress (fastify, options, next) {
       return
     }
 
+    if (caseSensitive === false && req.routeOptions.url !== undefined && hasCaseSensitiveMount(this.express, req)) {
+      const error = new Error('Express middleware matches this path case-sensitively')
+      error.statusCode = 500
+      next(error)
+      return
+    }
+
     if (this[kMiddlewares].length > 0) {
       for (const [headerName, headerValue] of Object.entries(reply.getHeaders())) {
         reply.raw.setHeader(headerName, headerValue)
@@ -226,8 +233,24 @@ function fastifyExpress (fastify, options, next) {
       if (caseSensitive === false) {
         filled = foldPath(filled)
       }
-      return hasHiddenMount(app.router.stack, path, filled)
+      return hasHiddenMount(app.router.stack, path, filled, true)
     })
+  }
+
+  // With case-insensitive routing, a matcher inside an Express Router or
+  // application can still match case-sensitively (a RegExp mount path without
+  // the `i` flag, `Router({ caseSensitive: true })`, `case sensitive routing`),
+  // and the `i` flag of a RegExp does not fold some characters as
+  // toLowerCase() does. Such a matcher would skip the request whatever its
+  // spelling, since Express is handed the lowercased path, so look for one
+  // that matches the route's own spelling but not its lowercased spelling.
+  function hasCaseSensitiveMount (app, req) {
+    let spelled = spellRoutePath(req.routeOptions.url, req.params, '')
+    if (ignoreDuplicateSlashes) {
+      spelled = removeDuplicateSlashes(spelled)
+    }
+    const folded = foldPath(spelled)
+    return spelled !== folded && hasHiddenMount(app.router.stack, folded, spelled, false)
   }
 
   next()
@@ -369,8 +392,9 @@ function isExpressApp (handle) {
 // Whether a layer of an Express router stack, or of a Router or application
 // mounted in it, matches `expected` but not `path`, the path Express is
 // handed. Layers are matched as Express matches them, but without the side
-// effects of Layer#match.
-function hasHiddenMount (stack, path, expected) {
+// effects of Layer#match. `opaque` is the answer for an application that
+// cannot be looked into.
+function hasHiddenMount (stack, path, expected, opaque) {
   for (const layer of stack) {
     // An error-handling middleware does not run for the request.
     if (layer.handle.length === 4) {
@@ -387,12 +411,14 @@ function hasHiddenMount (stack, path, expected) {
     }
 
     const inner = layer.route === undefined ? innerStack(layer.handle) : null
-    // An application mounted inside another one cannot be looked into, so
-    // assume it has such a layer.
+    // An application mounted inside another one cannot be looked into.
     if (inner === kOpaque) {
-      return true
+      if (opaque) {
+        return true
+      }
+      continue
     }
-    if (inner !== null && hasHiddenMount(inner, trimPath(path, match), trimPath(expected, expectedMatch))) {
+    if (inner !== null && hasHiddenMount(inner, trimPath(path, match), trimPath(expected, expectedMatch), opaque)) {
       return true
     }
   }
@@ -643,8 +669,31 @@ function splitPathAndQuery (url, useSemicolonDelimiter) {
   }
 }
 
-function foldRegExp (p) {
-  return p instanceof RegExp && !p.flags.includes('i') ? new RegExp(p.source, p.flags + 'i') : p
+// Express matches a string mount path with the `i` flag, which does not fold
+// every character as toLowerCase() folds the request path (`İ` becomes `i̇`,
+// `ẞ` becomes `ß`), so lowercase the literal text of the mount path the same
+// way. Parameter names keep their case, since they name the values in
+// req.params. A RegExp mount path gets the `i` flag.
+function foldMountPath (p) {
+  if (p instanceof RegExp) {
+    return p.flags.includes('i') ? p : new RegExp(p.source, p.flags + 'i')
+  }
+  if (typeof p !== 'string') {
+    return p
+  }
+  return stringify(new TokenData(foldTokens(parse(p).tokens), p))
+}
+
+function foldTokens (tokens) {
+  return tokens.map(token => {
+    if (token.type === 'text') {
+      return { ...token, value: token.value.toLowerCase() }
+    }
+    if (token.type === 'group') {
+      return { ...token, tokens: foldTokens(token.tokens) }
+    }
+    return token
+  })
 }
 
 function removeDuplicateSlashes (path) {
