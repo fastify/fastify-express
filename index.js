@@ -16,12 +16,20 @@ function fastifyExpress (fastify, options, next) {
 
   const { initialConfig } = fastify
   const routerOptions = initialConfig.routerOptions || {}
-  // Fastify fills `false` defaults into initialConfig.routerOptions whenever a
-  // routerOptions object is passed, while its router falls back to the
-  // deprecated top-level option for every key that object does not set, so
-  // follow either one that turns an option on.
-  const ignoreDuplicateSlashes = routerOptions.ignoreDuplicateSlashes === true || initialConfig.ignoreDuplicateSlashes === true
-  const useSemicolonDelimiter = routerOptions.useSemicolonDelimiter === true || initialConfig.useSemicolonDelimiter === true
+  const duplicateSlashes = routerOption(initialConfig, 'ignoreDuplicateSlashes')
+  const semicolonDelimiter = routerOption(initialConfig, 'useSemicolonDelimiter')
+  // Express is handed the path normalized with an option on when the router
+  // may use it, and runConnect rejects a request that a middleware would match
+  // only with the option off (see hasOptionDependentMount).
+  const ignoreDuplicateSlashes = duplicateSlashes !== false
+  const useSemicolonDelimiter = semicolonDelimiter !== false
+  // The other ways the router may normalize a request path.
+  const alternativeUrlOptions = optionValues(duplicateSlashes)
+    .flatMap(collapse => optionValues(semicolonDelimiter).map(split => ({
+      ignoreDuplicateSlashes: collapse,
+      useSemicolonDelimiter: split
+    })))
+    .slice(1)
   const caseSensitive = routerOptions.caseSensitive ?? initialConfig.caseSensitive
 
   fastify.decorate('use', use)
@@ -155,6 +163,13 @@ function fastifyExpress (fastify, options, next) {
   }
 
   function runConnect (req, reply, next) {
+    if (hasOptionDependentMount(this.express, req)) {
+      const error = new Error('Ambiguous URL')
+      error.statusCode = 400
+      next(error)
+      return
+    }
+
     // An empty segment can match a Fastify route while the Express mount on the
     // same dynamic pattern is skipped, bypassing its middleware. Reject such
     // ambiguous requests. Only a route with parameters or a wildcard can take
@@ -242,6 +257,27 @@ function fastifyExpress (fastify, options, next) {
     })
   }
 
+  // When initialConfig cannot tell whether the router collapses duplicate
+  // slashes or ends the path at `;`, Express is handed the path normalized as
+  // if it did. A middleware that would match the path normalized the other way
+  // only could then be skipped for a request the router serves.
+  function hasOptionDependentMount (app, req) {
+    if (alternativeUrlOptions.length === 0) {
+      return false
+    }
+
+    const path = parseUrl(req.raw).pathname
+    return alternativeUrlOptions.some(urlOptions => {
+      // enhanceRequest has rejected a URL that cannot be decoded, which cannot
+      // be however its path is split.
+      let expected = normalizeUrl(req.raw.originalUrl, urlOptions).split('?', 1)[0]
+      if (caseSensitive === false) {
+        expected = foldPath(expected)
+      }
+      return expected !== path && hasHiddenMount(app.router.stack, path, expected, true)
+    })
+  }
+
   // With case-insensitive routing, a matcher inside an Express Router or
   // application can still match case-sensitively (a RegExp mount path without
   // the `i` flag, `Router({ caseSensitive: true })`, `case sensitive routing`),
@@ -259,6 +295,26 @@ function fastifyExpress (fastify, options, next) {
   }
 
   next()
+}
+
+// Whether the router uses a boolean option, or null when initialConfig cannot
+// tell. Fastify fills `false` defaults into initialConfig.routerOptions
+// whenever a routerOptions object is passed, while its router uses the
+// deprecated top-level option for every key that object does not set, so a
+// `false` there next to a top-level `true` may mean either.
+function routerOption (initialConfig, key) {
+  const value = initialConfig.routerOptions?.[key]
+  const deprecated = initialConfig[key] === true
+  if (value === false && deprecated) {
+    return null
+  }
+  return value === true || deprecated
+}
+
+// The values to normalize a request path with for an option: both, on first,
+// when the router may or may not use it.
+function optionValues (value) {
+  return value === null ? [true, false] : [value]
 }
 
 // Express replaces the prototype of req and res with its own, which drops the
